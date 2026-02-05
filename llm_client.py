@@ -7,6 +7,7 @@ supporting both OpenAI and compatible APIs (Ollama, Azure, etc.).
 
 import os
 import logging
+import time
 from typing import Optional
 from dataclasses import dataclass
 
@@ -28,10 +29,10 @@ class LLMConfig:
         max_tokens: Maximum tokens in response
     """
     api_key: str
-    base_url: Optional[str] = None
-    model: str = "gpt-4o"
+    base_url: Optional[str] = "https://api.mistral.ai/v1"
+    model: str = "mistral-large-latest"
     temperature: float = 0.0
-    max_tokens: int = 4096
+    max_tokens: int = 8192
 
 
 class LLMClient:
@@ -51,11 +52,11 @@ class LLMClient:
         """
         if config is None:
             config = LLMConfig(
-                api_key=os.environ.get("OPENAI_API_KEY", ""),
-                base_url=os.environ.get("OPENAI_BASE_URL"),
-                model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
-                temperature=float(os.environ.get("OPENAI_TEMPERATURE", "0.0")),
-                max_tokens=int(os.environ.get("OPENAI_MAX_TOKENS", "4096"))
+                api_key=os.environ.get("MISTRAL_API_KEY", os.environ.get("OPENAI_API_KEY", "")),
+                base_url=os.environ.get("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"),
+                model=os.environ.get("MISTRAL_MODEL", "mistral-large-latest"),
+                temperature=float(os.environ.get("MISTRAL_TEMPERATURE", "0.0")),
+                max_tokens=int(os.environ.get("MISTRAL_MAX_TOKENS", "8192"))
             )
         
         self.config = config
@@ -100,15 +101,25 @@ class LLMClient:
         
         logger.debug(f"Sending request to LLM with system prompt length={len(system_prompt)}")
         
+        start_time = time.time()
         response = self._client.chat.completions.create(
             model=self.config.model,
             messages=messages,
             temperature=temperature if temperature is not None else self.config.temperature,
             max_tokens=max_tokens if max_tokens is not None else self.config.max_tokens
         )
+        elapsed = time.time() - start_time
         
         content = response.choices[0].message.content
         
-        logger.debug(f"Received response with length={len(content)}")
+        # Log token usage if available
+        usage_info = ""
+        if hasattr(response, 'usage') and response.usage:
+            usage_info = f" | Tokens: {response.usage.prompt_tokens} in, {response.usage.completion_tokens} out"
+            print(f"         ⏱️  LLM call: {elapsed:.2f}s{usage_info}", flush=True)
+        else:
+            print(f"         ⏱️  LLM call: {elapsed:.2f}s | Response: {len(content)} chars", flush=True)
+        
+        logger.debug(f"Received response with length={len(content)} in {elapsed:.2f}s")
         
         return content

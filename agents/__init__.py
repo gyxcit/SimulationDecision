@@ -11,6 +11,8 @@ from .schemas import (
     ScenarioOutput,
     ImpactAssessmentOutput,
     RefinedStructureOutput,
+    EntityPlan,
+    EntityBatchOutput,
     CritiqueOutput,
     ReviewOutput,
 )
@@ -22,6 +24,8 @@ __all__ = [
     "ScenarioOutput",
     "ImpactAssessmentOutput",
     "RefinedStructureOutput",
+    "EntityPlan",
+    "EntityBatchOutput",
     "CritiqueOutput",
     "ReviewOutput",
 ]

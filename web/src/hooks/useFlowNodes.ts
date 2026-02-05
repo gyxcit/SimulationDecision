@@ -4,12 +4,14 @@ import type { Node, Edge } from '@xyflow/react';
 import { useStore } from '../store/useStore';
 
 export const useFlowNodes = () => {
-    const { model, selectedNode } = useStore();
+    const { model, selectedNode, showEntityBoxes } = useStore();
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
     // Store entity dimensions to preserve resizing
     const entityDimensionsRef = React.useRef<Map<string, { width: number, height: number }>>(new Map());
+    // Store component positions when entity boxes are hidden
+    const componentPositionsRef = React.useRef<Map<string, { x: number, y: number }>>(new Map());
 
     useEffect(() => {
         if (!model) return;
@@ -20,6 +22,13 @@ export const useFlowNodes = () => {
                 entityDimensionsRef.current.set(node.id, {
                     width: node.style.width as number,
                     height: node.style.height as number,
+                });
+            }
+            // Save component positions when they are free-floating
+            if (node.type === 'component' && !node.parentId) {
+                componentPositionsRef.current.set(node.id, {
+                    x: node.position.x,
+                    y: node.position.y,
                 });
             }
         });
@@ -67,24 +76,27 @@ export const useFlowNodes = () => {
             // Check if we have saved dimensions for this entity (from manual resizing)
             const savedDimensions = entityDimensionsRef.current.get(entityId);
 
-            newNodes.push({
-                id: entityId,
-                type: 'group',
-                position: { x: entityX, y: 0 },
-                style: {
-                    width: savedDimensions?.width || calculatedWidth,
-                    height: savedDimensions?.height || calculatedHeight,
-                    backgroundColor: 'rgba(0,0,0,0.05)',
-                    borderRadius: 8,
-                    border: '1px dashed #ccc',
-                    minWidth: 200,
-                    minHeight: 200,
-                },
-                data: {
-                    label: entityName,
-                    resizable: true
-                },
-            });
+            // Only add entity group node if showEntityBoxes is true
+            if (showEntityBoxes) {
+                newNodes.push({
+                    id: entityId,
+                    type: 'group',
+                    position: { x: entityX, y: 0 },
+                    style: {
+                        width: savedDimensions?.width || calculatedWidth,
+                        height: savedDimensions?.height || calculatedHeight,
+                        backgroundColor: 'rgba(0,0,0,0.05)',
+                        borderRadius: 8,
+                        border: '1px dashed #ccc',
+                        minWidth: 200,
+                        minHeight: 200,
+                    },
+                    data: {
+                        label: entityName,
+                        resizable: true
+                    },
+                });
+            }
 
             // Component Nodes
             let compY = HEADER_HEIGHT;
@@ -92,12 +104,23 @@ export const useFlowNodes = () => {
 
             Object.entries(entity.components).forEach(([compName, comp]) => {
                 const compId = `${entityName}.${compName}`;
+                
+                // Calculate position based on whether entity boxes are shown
+                let nodePosition;
+                if (showEntityBoxes) {
+                    nodePosition = { x: PADDING, y: compY };
+                } else {
+                    // Use saved position or calculate based on entity position
+                    const savedPos = componentPositionsRef.current.get(compId);
+                    nodePosition = savedPos || { 
+                        x: entityX + PADDING, 
+                        y: compY 
+                    };
+                }
 
-                newNodes.push({
+                const nodeConfig: Node = {
                     id: compId,
-                    parentId: entityId,
-                    extent: 'parent',
-                    position: { x: PADDING, y: compY },
+                    position: nodePosition,
                     data: {
                         label: compName,
                         type: comp.type,
@@ -110,15 +133,25 @@ export const useFlowNodes = () => {
                         width: parentWidth - (PADDING * 2),
                         height: COMP_HEIGHT,
                     },
-                    type: 'component', // Use custom component node type
-                });
+                    type: 'component',
+                };
+
+                // Only set parent if entity boxes are shown
+                if (showEntityBoxes) {
+                    nodeConfig.parentId = entityId;
+                    nodeConfig.extent = 'parent';
+                }
+
+                newNodes.push(nodeConfig);
 
                 compY += COMP_HEIGHT + COMP_GAP;
 
-                // Update parent height based on children
-                const parentNode = newNodes.find(n => n.id === entityId);
-                if (parentNode && parentNode.style) {
-                    parentNode.style.height = compY + 20;
+                // Update parent height based on children (only if entity boxes are shown)
+                if (showEntityBoxes) {
+                    const parentNode = newNodes.find(n => n.id === entityId);
+                    if (parentNode && parentNode.style) {
+                        parentNode.style.height = compY + 20;
+                    }
                 }
 
                 // Create Edges for influences
@@ -178,7 +211,7 @@ export const useFlowNodes = () => {
         setNodes(newNodes);
         setEdges(newEdges);
 
-    }, [model]);
+    }, [model, showEntityBoxes]);
 
     // Apply highlighting based on selected node
     const highlightedNodes = useMemo(() => {

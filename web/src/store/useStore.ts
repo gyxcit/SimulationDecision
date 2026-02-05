@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SystemModel, SimulationResult } from '../types';
+import type { SystemModel, SimulationResult, Influence } from '../types';
 import axios from 'axios';
 
 // Stored simulation for comparison
@@ -11,6 +11,14 @@ export interface StoredSimulation {
     variables: string[];
 }
 
+// Batch simulation config
+export interface BatchSimConfig {
+    parameter: string; // "Entity.Component"
+    minValue: number;
+    maxValue: number;
+    steps: number;
+}
+
 interface AppState {
     model: SystemModel | null;
     simulationResult: SimulationResult | null;
@@ -18,17 +26,26 @@ interface AppState {
     isLoading: boolean;
     selectedNode: string | null; // "Entity.Component" or "Entity"
     useV7: boolean; // Toggle between V5 and V7 pipeline
+    showEntityBoxes: boolean; // Toggle entity boxes visibility on canvas
 
     // Actions
     setModel: (model: SystemModel) => void;
     generateModel: (description: string) => Promise<void>;
     runSimulation: () => Promise<void>;
+    runBatchSimulations: (config: BatchSimConfig) => Promise<void>;
     updateParameter: (path: string, value: number) => void;
     updateComponentParameter: (path: string, values: { initial: number, min: number | null, max: number | null }) => void;
     updateInfluence: (componentPath: string, influenceIndex: number, updates: Partial<{ coef: number, kind: string, enabled: boolean, function: string }>) => void;
+    addInfluence: (componentPath: string, influence: Influence) => void;
+    removeInfluence: (componentPath: string, influenceIndex: number) => void;
+    addEntity: (name: string, description?: string) => void;
+    removeEntity: (name: string) => void;
+    addComponent: (entityName: string, componentName: string, component: { type: string, initial: number, min?: number, max?: number, influences?: Influence[] }) => void;
+    removeComponent: (entityName: string, componentName: string) => void;
     updateSimulationConfig: (updates: Partial<{ dt: number, steps: number }>) => void;
     selectNode: (id: string | null) => void;
     toggleV7: () => void;
+    toggleEntityBoxes: () => void;
     storeSimulation: (name?: string) => void;
     removeStoredSimulation: (id: string) => void;
     renameStoredSimulation: (id: string, name: string) => void;
@@ -122,6 +139,7 @@ export const useStore = create<AppState>((set, get) => ({
     isLoading: false,
     selectedNode: null,
     useV7: false, // Default to V5 for speed
+    showEntityBoxes: true, // Show entity boxes by default
 
     setModel: (model) => {
         set({ model });
@@ -204,6 +222,70 @@ export const useStore = create<AppState>((set, get) => ({
         }
     },
 
+    runBatchSimulations: async (config: BatchSimConfig) => {
+        const { model, storedSimulations } = get();
+        if (!model) return;
+
+        set({ isLoading: true });
+        try {
+            const [entityName, componentName] = config.parameter.split('.');
+            const stepSize = (config.maxValue - config.minValue) / (config.steps - 1);
+            
+            // Extract variable names
+            const variables: string[] = [];
+            Object.entries(model.entities).forEach(([eName, entity]) => {
+                Object.keys(entity.components).forEach(cName => {
+                    variables.push(`${eName}.${cName}`);
+                });
+            });
+
+            const newSimulations: StoredSimulation[] = [];
+
+            for (let i = 0; i < config.steps; i++) {
+                const paramValue = config.minValue + (i * stepSize);
+                
+                // Clone model and set parameter
+                const testModel = JSON.parse(JSON.stringify(model));
+                if (testModel.entities[entityName]?.components[componentName]) {
+                    testModel.entities[entityName].components[componentName].initial = paramValue;
+                }
+
+                // Run simulation
+                const response = await axios.post(`${API_URL}/simulate`, {
+                    model: testModel,
+                    steps: testModel.simulation.steps,
+                    dt: testModel.simulation.dt
+                });
+
+                if (response.data.success) {
+                    const result: SimulationResult = {
+                        time_points: response.data.time_points,
+                        history: response.data.history,
+                        final_state: response.data.final_state
+                    };
+
+                    newSimulations.push({
+                        id: `sim-${Date.now()}-${i}`,
+                        name: `${config.parameter}=${paramValue.toFixed(2)}`,
+                        timestamp: new Date(),
+                        result: result,
+                        variables
+                    });
+                }
+            }
+
+            // Add all new simulations
+            const allSimulations = [...storedSimulations, ...newSimulations];
+            set({ storedSimulations: allSimulations });
+            saveSimulationsToStorage(allSimulations);
+
+        } catch (error) {
+            console.error("Batch simulation failed", error);
+        } finally {
+            set({ isLoading: false });
+        }
+    },
+
     updateParameter: (path, value) => {
         set((state) => {
             if (!state.model) return state;
@@ -257,6 +339,133 @@ export const useStore = create<AppState>((set, get) => ({
         });
     },
 
+    addInfluence: (componentPath, influence) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const [entityName, componentName] = componentPath.split('.');
+            const newModel = JSON.parse(JSON.stringify(state.model));
+
+            if (newModel.entities[entityName]?.components[componentName]) {
+                newModel.entities[entityName].components[componentName].influences.push(influence);
+            }
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    removeInfluence: (componentPath, influenceIndex) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const [entityName, componentName] = componentPath.split('.');
+            const newModel = JSON.parse(JSON.stringify(state.model));
+
+            if (newModel.entities[entityName]?.components[componentName]) {
+                newModel.entities[entityName].components[componentName].influences.splice(influenceIndex, 1);
+            }
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    addEntity: (name, description = '') => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const newModel = JSON.parse(JSON.stringify(state.model));
+            
+            // Don't add if entity already exists
+            if (newModel.entities[name]) return state;
+
+            newModel.entities[name] = {
+                description: description,
+                components: {}
+            };
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    removeEntity: (name) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const newModel = JSON.parse(JSON.stringify(state.model));
+            
+            // Remove the entity
+            if (newModel.entities[name]) {
+                delete newModel.entities[name];
+                
+                // Also remove any influences that reference this entity's components
+                Object.values(newModel.entities).forEach((entity: any) => {
+                    Object.values(entity.components).forEach((comp: any) => {
+                        comp.influences = comp.influences.filter((inf: any) => 
+                            !inf.from.startsWith(`${name}.`)
+                        );
+                    });
+                });
+            }
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    addComponent: (entityName, componentName, component) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const newModel = JSON.parse(JSON.stringify(state.model));
+            
+            // Check entity exists
+            if (!newModel.entities[entityName]) return state;
+            
+            // Don't add if component already exists
+            if (newModel.entities[entityName].components[componentName]) return state;
+
+            newModel.entities[entityName].components[componentName] = {
+                type: component.type || 'state',
+                initial: component.initial ?? 0,
+                min: component.min ?? 0,
+                max: component.max ?? 1,
+                influences: component.influences || []
+            };
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    removeComponent: (entityName, componentName) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const newModel = JSON.parse(JSON.stringify(state.model));
+            
+            // Remove the component
+            if (newModel.entities[entityName]?.components[componentName]) {
+                delete newModel.entities[entityName].components[componentName];
+                
+                // Also remove any influences that reference this component
+                const componentPath = `${entityName}.${componentName}`;
+                Object.values(newModel.entities).forEach((entity: any) => {
+                    Object.values(entity.components).forEach((comp: any) => {
+                        comp.influences = comp.influences.filter((inf: any) => 
+                            inf.from !== componentPath
+                        );
+                    });
+                });
+            }
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
     updateSimulationConfig: (updates) => {
         set((state) => {
             if (!state.model) return state;
@@ -272,6 +481,8 @@ export const useStore = create<AppState>((set, get) => ({
     selectNode: (id) => set({ selectedNode: id }),
 
     toggleV7: () => set((state) => ({ useV7: !state.useV7 })),
+
+    toggleEntityBoxes: () => set((state) => ({ showEntityBoxes: !state.showEntityBoxes })),
 
     storeSimulation: (name?: string) => {
         const { simulationResult, model, storedSimulations } = get();

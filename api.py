@@ -86,10 +86,12 @@ def get_llm_config() -> Optional[LLMConfig]:
             base_url="https://api.mistral.ai/v1",
             model="mistral-large-latest",
             temperature=0.0,
+            max_tokens=16384,  # Increased for complex agent outputs
         )
     elif os.environ.get("OPENAI_API_KEY"):
         return LLMConfig(
             api_key=os.environ.get("OPENAI_API_KEY"),
+            max_tokens=16384,  # Increased for complex agent outputs
         )
     return None
 
@@ -135,6 +137,7 @@ async def generate_model(request: GenerateRequest, use_v7: bool = False):
     - use_v7: If True, uses the Multi-Agent System V7 pipeline (slower but more thorough)
               If False, uses the legacy V5 single-LLM pipeline (default, faster)
     """
+    import sys
     try:
         config = get_llm_config()
         if not config:
@@ -145,13 +148,21 @@ async def generate_model(request: GenerateRequest, use_v7: bool = False):
         
         if use_v7:
             # Use Multi-Agent System V7
+            print(f"\n🚀 API: Starting V7 pipeline for: {request.description[:50]}...", flush=True)
+            sys.stdout.flush()
             from orchestrator import build_system_model
             model = build_system_model(request.description, llm_config=config)
             generation_mode = "v7"
+            print(f"✅ API: V7 pipeline completed successfully", flush=True)
+            sys.stdout.flush()
         else:
             # Use legacy V5 single-LLM pipeline
+            print(f"\n🚀 API: Starting V5 pipeline for: {request.description[:50]}...", flush=True)
+            sys.stdout.flush()
             model = generate_system_model(request.description, llm_config=config)
             generation_mode = "v5"
+            print(f"✅ API: V5 pipeline completed successfully", flush=True)
+            sys.stdout.flush()
         
         result = model.model_dump(by_alias=True)
         result["generation_mode"] = generation_mode  # Add mode indicator
@@ -161,6 +172,8 @@ async def generate_model(request: GenerateRequest, use_v7: bool = False):
             model=result
         )
     except Exception as e:
+        print(f"❌ API: Pipeline failed with error: {str(e)}", flush=True)
+        sys.stdout.flush()
         return GenerateResponse(
             success=False,
             error=str(e)
@@ -313,6 +326,447 @@ async def simulate_batch(request: MultiSimulateRequest):
         import traceback
         traceback.print_exc()
         return MultiSimulateResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+# =============================================================================
+# AI EDIT ENDPOINTS
+# =============================================================================
+
+class AIEditRequest(BaseModel):
+    """Request to analyze AI edit impact."""
+    model: Dict[str, Any]
+    target: str  # "Entity.Component" or "Entity"
+    instruction: str
+
+class AIEditProposal(BaseModel):
+    """AI edit proposal with impact analysis."""
+    changes: List[Dict[str, Any]]
+    requiresOtherChanges: bool
+    otherChanges: Optional[List[Dict[str, Any]]] = None
+
+class AIEditResponse(BaseModel):
+    """Response containing AI edit proposal."""
+    success: bool
+    proposal: Optional[AIEditProposal] = None
+    error: Optional[str] = None
+
+
+@app.post("/ai-edit/analyze", response_model=AIEditResponse)
+async def ai_edit_analyze(request: AIEditRequest):
+    """
+    Analyze an AI edit request and return proposed changes with impact analysis.
+    """
+    import json
+    from llm_client import LLMClient
+    
+    try:
+        config = get_llm_config()
+        if not config:
+            raise HTTPException(
+                status_code=500,
+                detail="No LLM API key configured"
+            )
+        
+        client = LLMClient(config)
+        
+        # Build context about the target
+        target_parts = request.target.split('.')
+        is_component = len(target_parts) == 2
+        
+        if is_component:
+            entity_name, comp_name = target_parts
+            component = request.model['entities'].get(entity_name, {}).get('components', {}).get(comp_name, {})
+            target_context = f"Component: {request.target}\nCurrent state: {json.dumps(component, indent=2)}"
+        else:
+            entity = request.model['entities'].get(request.target, {})
+            target_context = f"Entity: {request.target}\nComponents: {list(entity.get('components', {}).keys())}"
+        
+        # Find related influences
+        related_influences = []
+        for ent_name, entity in request.model['entities'].items():
+            for comp_name, comp in entity.get('components', {}).items():
+                for inf in comp.get('influences', []):
+                    if request.target in inf.get('from', '') or request.target in f"{ent_name}.{comp_name}":
+                        related_influences.append({
+                            'from': inf.get('from'),
+                            'to': f"{ent_name}.{comp_name}",
+                            'coef': inf.get('coef'),
+                            'kind': inf.get('kind')
+                        })
+        
+        system_prompt = """You are a system modeling expert. Analyze the requested modification and determine:
+1. What changes are needed to the target component/entity
+2. Whether other parts of the system need to be modified to maintain consistency
+3. Why each change is necessary
+
+Output ONLY valid JSON in this format:
+{
+  "changes": [
+    {
+      "target": "Entity.Component",
+      "field": "initial|min|max|type",
+      "oldValue": <current value>,
+      "newValue": <proposed value>,
+      "reason": "explanation"
+    }
+  ],
+  "requiresOtherChanges": true/false,
+  "otherChanges": [
+    {
+      "target": "OtherEntity.Component",
+      "description": "what needs to change",
+      "reason": "why it's needed to maintain consistency"
+    }
+  ]
+}"""
+
+        user_prompt = f"""System Model Context:
+{target_context}
+
+Related Influences:
+{json.dumps(related_influences, indent=2)}
+
+User Request: {request.instruction}
+
+Analyze the impact and propose changes. Be specific about values."""
+
+        response = client.generate(system_prompt, user_prompt)
+        
+        # Parse response
+        try:
+            # Clean response
+            response_text = response.strip()
+            if response_text.startswith('```'):
+                response_text = response_text.split('```')[1]
+                if response_text.startswith('json'):
+                    response_text = response_text[4:]
+            response_text = response_text.strip()
+            
+            proposal_data = json.loads(response_text)
+            
+            return AIEditResponse(
+                success=True,
+                proposal=AIEditProposal(
+                    changes=proposal_data.get('changes', []),
+                    requiresOtherChanges=proposal_data.get('requiresOtherChanges', False),
+                    otherChanges=proposal_data.get('otherChanges', [])
+                )
+            )
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse AI response: {e}")
+            print(f"Response was: {response}")
+            # Return a simple fallback proposal
+            return AIEditResponse(
+                success=True,
+                proposal=AIEditProposal(
+                    changes=[{
+                        "target": request.target,
+                        "field": "initial",
+                        "oldValue": 0,
+                        "newValue": 0,
+                        "reason": request.instruction
+                    }],
+                    requiresOtherChanges=False
+                )
+            )
+    
+    except Exception as e:
+        print(f"AI edit analysis failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return AIEditResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+@app.post("/ai-edit/entity", response_model=AIEditResponse)
+async def ai_edit_entity(request: AIEditRequest):
+    """
+    Analyze an AI edit request for an entire entity.
+    """
+    import json
+    from llm_client import LLMClient
+    
+    try:
+        config = get_llm_config()
+        if not config:
+            raise HTTPException(
+                status_code=500,
+                detail="No LLM API key configured"
+            )
+        
+        client = LLMClient(config)
+        
+        entity_name = request.target
+        entity = request.model['entities'].get(entity_name, {})
+        
+        # Find all influences involving this entity
+        influences_from = []
+        influences_to = []
+        for ent_name, ent in request.model['entities'].items():
+            for comp_name, comp in ent.get('components', {}).items():
+                for inf in comp.get('influences', []):
+                    if inf.get('from', '').startswith(f"{entity_name}."):
+                        influences_from.append({
+                            'from': inf.get('from'),
+                            'to': f"{ent_name}.{comp_name}",
+                            'coef': inf.get('coef')
+                        })
+                    if ent_name == entity_name:
+                        influences_to.append({
+                            'from': inf.get('from'),
+                            'to': f"{ent_name}.{comp_name}",
+                            'coef': inf.get('coef')
+                        })
+        
+        system_prompt = """You are a system modeling expert. Analyze the entity modification request and propose changes.
+
+Output ONLY valid JSON:
+{
+  "changes": [
+    {
+      "type": "add_component|modify_component|delete_component|add_influence|modify_influence",
+      "target": "Entity.Component",
+      "description": "what to change",
+      "reason": "why"
+    }
+  ],
+  "affectsOtherEntities": true/false,
+  "otherEntityChanges": [
+    {
+      "entity": "OtherEntity",
+      "description": "what needs to change",
+      "reason": "why"
+    }
+  ]
+}"""
+
+        user_prompt = f"""Entity: {entity_name}
+Components: {json.dumps(entity.get('components', {}), indent=2)}
+
+Influences from this entity: {json.dumps(influences_from, indent=2)}
+Influences to this entity: {json.dumps(influences_to, indent=2)}
+
+Other entities in system: {[e for e in request.model['entities'].keys() if e != entity_name]}
+
+User Request: {request.instruction}"""
+
+        response = client.generate(system_prompt, user_prompt)
+        
+        try:
+            response_text = response.strip()
+            if response_text.startswith('```'):
+                response_text = response_text.split('```')[1]
+                if response_text.startswith('json'):
+                    response_text = response_text[4:]
+            response_text = response_text.strip()
+            
+            proposal_data = json.loads(response_text)
+            
+            # Convert entity format to component format
+            changes = []
+            for change in proposal_data.get('changes', []):
+                changes.append({
+                    "target": change.get('target', entity_name),
+                    "field": change.get('type', 'modify'),
+                    "oldValue": None,
+                    "newValue": change.get('description'),
+                    "reason": change.get('reason')
+                })
+            
+            other_changes = []
+            for change in proposal_data.get('otherEntityChanges', []):
+                other_changes.append({
+                    "target": change.get('entity'),
+                    "description": change.get('description'),
+                    "reason": change.get('reason')
+                })
+            
+            return AIEditResponse(
+                success=True,
+                proposal=AIEditProposal(
+                    changes=changes,
+                    requiresOtherChanges=proposal_data.get('affectsOtherEntities', False),
+                    otherChanges=other_changes
+                )
+            )
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse AI response: {e}")
+            return AIEditResponse(
+                success=True,
+                proposal=AIEditProposal(
+                    changes=[{
+                        "target": entity_name,
+                        "field": "modify",
+                        "oldValue": None,
+                        "newValue": request.instruction,
+                        "reason": "Based on user request"
+                    }],
+                    requiresOtherChanges=False
+                )
+            )
+    
+    except Exception as e:
+        print(f"AI entity edit failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return AIEditResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+# =============================================================================
+# AI CHAT ENDPOINT
+# =============================================================================
+
+class ChatRequest(BaseModel):
+    """Request for AI chat interaction."""
+    message: str
+    model: Optional[Dict[str, Any]] = None
+    context: Optional[Dict[str, Any]] = None  # selectedNode, mentions, etc.
+
+class ChatAction(BaseModel):
+    """An action taken by the AI."""
+    type: str  # 'add_entity', 'add_component', 'add_influence', 'modify', 'delete'
+    target: str
+    description: str
+    details: Optional[Dict[str, Any]] = None
+
+class ChatResponse(BaseModel):
+    """Response from AI chat."""
+    success: bool
+    message: Optional[str] = None
+    actions: Optional[List[ChatAction]] = None
+    modelUpdates: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_model(request: ChatRequest):
+    """
+    Process a chat message and potentially modify the model.
+    """
+    import json
+    import copy
+    from llm_client import LLMClient
+    
+    try:
+        config = get_llm_config()
+        if not config:
+            raise HTTPException(
+                status_code=500,
+                detail="No LLM API key configured"
+            )
+        
+        client = LLMClient(config)
+        
+        # Build context
+        model_summary = "No model loaded"
+        if request.model:
+            entities = list(request.model.get('entities', {}).keys())
+            components = []
+            for ent_name, entity in request.model.get('entities', {}).items():
+                for comp_name in entity.get('components', {}).keys():
+                    components.append(f"{ent_name}.{comp_name}")
+            model_summary = f"Entities: {entities}\nComponents: {components}"
+        
+        mentions = request.context.get('mentions', []) if request.context else []
+        selected_node = request.context.get('selectedNode') if request.context else None
+        
+        system_prompt = f"""You are an AI assistant for a dynamic systems modeling application.
+The user can ask you to:
+- Add new entities
+- Add new components to entities
+- Add influences/relationships between components
+- Modify existing components (change parameters, coefficients)
+- Delete entities or components
+- Explain the model
+
+Current Model:
+{model_summary}
+
+User's selected context: {selected_node or 'None'}
+Mentioned elements: {mentions}
+
+Respond with a JSON object containing:
+{{
+    "message": "Your response message to the user",
+    "actions": [
+        {{
+            "type": "add_entity|add_component|add_influence|modify|delete|explain",
+            "target": "Entity or Entity.Component",
+            "description": "What this action does",
+            "details": {{ ... action-specific data ... }}
+        }}
+    ],
+    "modelUpdates": {{ ... updated model if changes were made, or null ... }}
+}}
+
+For add_entity, details should include: {{ "name": "EntityName", "components": {{ "CompName": {{ "type": "state", "initial": 0.5, "min": 0, "max": 1, "influences": [] }} }} }}
+For add_component, details should include: {{ "entity": "EntityName", "name": "ComponentName", "component": {{ "type": "state", "initial": 0.5, "min": 0, "max": 1, "influences": [] }} }}
+For add_influence, details should include: {{ "to": "Entity.Component", "influence": {{ "from": "Entity.Component", "kind": "positive", "coef": 0.1, "function": "linear", "enabled": true }} }}
+For modify, details should include the specific field changes.
+For delete, details should include {{ "target": "Entity or Entity.Component" }}.
+
+If changes are made, include the complete updated model in modelUpdates.
+Always respond in JSON format only."""
+
+        user_prompt = f"User message: {request.message}"
+        
+        response = client.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=4000,
+            temperature=0.7
+        )
+        
+        # Parse response
+        try:
+            # Clean the response
+            response_text = response.strip()
+            if response_text.startswith('```json'):
+                response_text = response_text[7:]
+            if response_text.startswith('```'):
+                response_text = response_text[3:]
+            if response_text.endswith('```'):
+                response_text = response_text[:-3]
+            
+            result = json.loads(response_text.strip())
+            
+            actions = []
+            for action in result.get('actions', []):
+                actions.append(ChatAction(
+                    type=action.get('type', 'explain'),
+                    target=action.get('target', ''),
+                    description=action.get('description', ''),
+                    details=action.get('details')
+                ))
+            
+            return ChatResponse(
+                success=True,
+                message=result.get('message', 'Done'),
+                actions=actions,
+                modelUpdates=result.get('modelUpdates')
+            )
+            
+        except json.JSONDecodeError:
+            # If parsing fails, return the raw response
+            return ChatResponse(
+                success=True,
+                message=response,
+                actions=[]
+            )
+    
+    except Exception as e:
+        print(f"Chat failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return ChatResponse(
             success=False,
             error=str(e)
         )

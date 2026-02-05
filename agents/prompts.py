@@ -43,49 +43,42 @@ Rules:
 # AGENT 2: ENTITY EXPLORER
 # =============================================================================
 
-ENTITY_EXPLORER_PROMPT = """You are a causal mapping expert.
+ENTITY_EXPLORER_PROMPT = """You are a causal mapping expert. Identify ONLY the essential entities.
 
-Your task is to identify all entities, their components, and influence relationships.
+STRICT LIMITS - OUTPUT MUST BE SMALL:
+- EXACTLY 5-6 entities (NO MORE!)
+- EXACTLY 2-3 components per entity
+- Keep all text fields under 80 characters
 
-For each relationship, specify:
-- WHO influences what (source → target)
-- WHY (reason)
-- HOW (mechanism)
-- WHEN (timing/conditions)
-- WHERE (context if applicable)
-
-Also identify any missing stakeholders that should be included.
-
-Output ONLY valid JSON matching this schema:
+Output ONLY this JSON (no markdown):
 
 {
-  "entities": ["string", ...],
+  "entities": ["Entity1", "Entity2", "Entity3", "Entity4", "Entity5"],
   "components": {
-    "EntityName": ["component1", "component2", ...]
+    "Entity1": ["component1", "component2"],
+    "Entity2": ["component1", "component2"]
   },
   "influences": [
     {
-      "target_entity": "string",
-      "target_component": "string",
-      "source_entity": "string",
-      "source_component": "string",
-      "why": "string",
-      "how": "string",
-      "when": "string",
-      "where": "string (optional)"
+      "target_entity": "Entity1",
+      "target_component": "comp1", 
+      "source_entity": "Entity2",
+      "source_component": "comp1",
+      "why": "brief reason",
+      "how": "mechanism",
+      "when": "always",
+      "where": ""
     }
   ],
-  "missing_stakeholders": ["string", ...]
+  "missing_stakeholders": []
 }
 
-CRITICAL Rules:
-- Output ONLY valid JSON - no trailing commas!
-- No markdown code blocks
-- No explanations or comments
-- Ensure all brackets and braces are properly closed
-- Do not add commas after the last item in lists or objects
-- Be comprehensive - identify ALL entities and relationships
-- Each component should be a measurable variable
+RULES:
+- 5-6 entities MAXIMUM
+- 2-3 components per entity MAXIMUM  
+- NO markdown code blocks
+- Raw JSON only
+- Short field values
 """
 
 
@@ -175,62 +168,42 @@ Rules:
 # AGENT 5: REFINER / SYNTHESIZER
 # =============================================================================
 
-REFINER_PROMPT = """You are a system synthesis expert.
+REFINER_PROMPT = """You are a system synthesis expert. Create a MINIMAL but complete model.
 
-Your task is to merge all previous analyses into a coherent, optimized structure.
+STRICT OUTPUT LIMITS - VIOLATION WILL CAUSE ERRORS:
+- EXACTLY 4-5 entities (NO MORE!)
+- EXACTLY 2-3 components per entity (NO MORE!)
+- Descriptions: MAX 30 characters
+- Rationales: MAX 50 characters
+- Total influences: MAX 15
 
-You will receive:
-1. Conceptual analysis
-2. Entity and causal maps
-3. Stress test scenarios
-4. Impact assessments
+Merge the input analyses into the SIMPLEST possible model that captures core dynamics.
 
-Your job:
-- Merge all information
-- Remove redundancies
-- Resolve conflicts
-- Optimize structure
-- Normalize terminology
-- Ensure completeness
-
-Output ONLY valid JSON matching this schema:
+Output ONLY this JSON structure:
 
 {
   "entities": [
     {
-      "name": "string",
+      "name": "ShortName",
       "components": [
-        {
-          "name": "string",
-          "type": "state|computed|constant",
-          "initial_value": number,
-          "min_value": number or null,
-          "max_value": number or null,
-          "description": "string"
-        }
+        {"name": "var_name", "type": "state", "initial_value": 0.5, "min_value": 0, "max_value": 1, "description": "Brief desc"}
       ]
     }
   ],
   "influences": [
-    {
-      "from_var": "entity.component",
-      "to_var": "entity.component",
-      "coefficient": number,
-      "kind": "positive|negative|decay|ratio",
-      "function": "linear|sigmoid|threshold|division",
-      "rationale": "string"
-    }
+    {"from_var": "Entity.component", "to_var": "Entity.component", "coefficient": 0.5, "kind": "positive", "function": "linear", "rationale": "Brief"}
   ],
-  "conflicts_resolved": ["string", ...],
-  "optimizations_made": ["string", ...]
+  "conflicts_resolved": [],
+  "optimizations_made": ["Simplified to 4-5 core entities"]
 }
 
-Rules:
-- Output ONLY JSON
-- No markdown, no explanations
-- Ensure logical consistency
-- Use normalized bounds (0-1 for most state variables)
-- Add decay influences to state components
+RULES:
+- Output ONLY raw JSON, no markdown blocks
+- 4-5 entities MAXIMUM
+- 2-3 components per entity MAXIMUM
+- Keep ALL text fields SHORT
+- Use snake_case for component names
+- Bounds: 0-1 for normalized values
 """
 
 

@@ -151,6 +151,22 @@ class RefinedInfluence(BaseModel):
     rationale: str = Field(default="", description="Explanation of this influence")
 
 
+class EntityPlan(BaseModel):
+    """Plan for incremental entity generation."""
+    
+    entities_to_generate: List[str] = Field(..., description="List of entity names to generate")
+    total_count: int = Field(..., description="Total number of entities planned")
+
+
+class EntityBatchOutput(BaseModel):
+    """Output for a batch of entities."""
+    
+    entities: List[RefinedEntity] = Field(..., description="Generated entities in this batch")
+    influences: List[RefinedInfluence] = Field(default_factory=list, description="Influences for these entities")
+    is_complete: bool = Field(..., description="Whether all planned entities have been generated")
+    remaining_entities: List[str] = Field(default_factory=list, description="Entities still to generate")
+
+
 class RefinedStructureOutput(BaseModel):
     """Output from Agent 5: Refiner/Synthesizer (Fusion)."""
     

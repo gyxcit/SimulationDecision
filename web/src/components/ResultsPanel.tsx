@@ -65,14 +65,6 @@ export const ResultsPanel: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col">
-            <div className="px-4 py-3 border-b bg-card">
-                <h3 className="font-semibold text-sm flex items-center gap-2">
-                    Simulation Results
-                    <span className="text-xs font-normal text-muted-foreground ml-auto">
-                        t={simulationResult.time_points[simulationResult.time_points.length - 1].toFixed(1)}s
-                    </span>
-                </h3>
-            </div>
             <div className="flex-1 p-4 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>

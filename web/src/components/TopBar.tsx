@@ -1,15 +1,15 @@
 import React from 'react';
-import { Play, RotateCcw, Download, Upload, Activity, Home } from 'lucide-react';
+import { Play, RotateCcw, Download, Upload, Activity, Home, Box, Layers } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
 
 interface TopBarProps {
-    currentView?: 'canvas' | 'simulations';
+    currentView?: 'canvas' | 'simulations' | 'visualization';
     onNavigateHome?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNavigateHome }) => {
-    const { model, runSimulation, isLoading } = useStore();
+    const { model, runSimulation, isLoading, showEntityBoxes, toggleEntityBoxes } = useStore();
 
     return (
         <div className="h-14 border-b bg-card flex items-center px-4 justify-between shadow-sm">
@@ -57,6 +57,22 @@ export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNaviga
                     >
                         <RotateCcw className="w-4 h-4" />
                     </button>
+
+                    {/* Entity Boxes Toggle - Only show on canvas view */}
+                    {currentView === 'canvas' && (
+                        <button
+                            onClick={toggleEntityBoxes}
+                            className={cn(
+                                "p-1.5 rounded-md transition-colors",
+                                showEntityBoxes 
+                                    ? "bg-primary/10 text-primary hover:bg-primary/20" 
+                                    : "hover:bg-accent text-muted-foreground"
+                            )}
+                            title={showEntityBoxes ? "Masquer les boîtes d'entités" : "Afficher les boîtes d'entités"}
+                        >
+                            {showEntityBoxes ? <Box className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-4 text-sm">
