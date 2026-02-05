@@ -1,18 +1,39 @@
 import React from 'react';
-import { Play, RotateCcw, Download, Upload, Activity } from 'lucide-react';
+import { Play, RotateCcw, Download, Upload, Activity, Home } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
 
-export const TopBar: React.FC = () => {
+interface TopBarProps {
+    currentView?: 'canvas' | 'simulations';
+    onNavigateHome?: () => void;
+}
+
+export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNavigateHome }) => {
     const { model, runSimulation, isLoading } = useStore();
 
     return (
         <div className="h-14 border-b bg-card flex items-center px-4 justify-between shadow-sm">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
                 <div className="bg-primary/10 p-2 rounded-lg">
                     <Activity className="w-5 h-5 text-primary" />
                 </div>
-                <h1 className="font-bold text-lg">HybridSystem V5</h1>
+                <div>
+                    <h1 className="font-bold text-lg">HybridSystem V5</h1>
+                    <p className="text-xs text-muted-foreground">
+                        {currentView === 'canvas' ? 'System Canvas' : 'Multi-Simulations'}
+                    </p>
+                </div>
+
+                {/* Navigation Breadcrumb */}
+                {currentView === 'simulations' && onNavigateHome && (
+                    <button
+                        onClick={onNavigateHome}
+                        className="ml-2 flex items-center gap-1 px-3 py-1 text-sm hover:bg-accent rounded-md transition-colors"
+                    >
+                        <Home className="w-3.5 h-3.5" />
+                        Return to Canvas
+                    </button>
+                )}
             </div>
 
             <div className="flex items-center gap-4">
@@ -20,7 +41,7 @@ export const TopBar: React.FC = () => {
                     {/* Simulation Controls */}
                     <button
                         onClick={runSimulation}
-                        disabled={!model || isLoading}
+                        disabled={!model || isLoading || currentView === 'simulations'}
                         className={cn(
                             "flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
                             "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"

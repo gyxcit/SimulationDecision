@@ -2,36 +2,146 @@ import { create } from 'zustand';
 import type { SystemModel, SimulationResult } from '../types';
 import axios from 'axios';
 
+// Stored simulation for comparison
+export interface StoredSimulation {
+    id: string;
+    name: string;
+    timestamp: Date;
+    result: SimulationResult;
+    variables: string[];
+}
+
 interface AppState {
     model: SystemModel | null;
     simulationResult: SimulationResult | null;
+    storedSimulations: StoredSimulation[];
     isLoading: boolean;
     selectedNode: string | null; // "Entity.Component" or "Entity"
+    useV7: boolean; // Toggle between V5 and V7 pipeline
 
     // Actions
     setModel: (model: SystemModel) => void;
     generateModel: (description: string) => Promise<void>;
     runSimulation: () => Promise<void>;
     updateParameter: (path: string, value: number) => void;
+    updateComponentParameter: (path: string, values: { initial: number, min: number | null, max: number | null }) => void;
+    updateInfluence: (componentPath: string, influenceIndex: number, updates: Partial<{ coef: number, kind: string, enabled: boolean, function: string }>) => void;
+    updateSimulationConfig: (updates: Partial<{ dt: number, steps: number }>) => void;
     selectNode: (id: string | null) => void;
+    toggleV7: () => void;
+    storeSimulation: (name?: string) => void;
+    removeStoredSimulation: (id: string) => void;
+    renameStoredSimulation: (id: string, name: string) => void;
 }
 
 const API_URL = 'http://localhost:8000';
+const STORAGE_KEY = 'industriel_ai_model';
+const SIMULATIONS_STORAGE_KEY = 'industriel_ai_simulations';
+const SIMULATION_RESULT_KEY = 'industriel_ai_simulation_result';
+
+// Load model from localStorage
+const loadModelFromStorage = (): SystemModel | null => {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+        console.error('Failed to load model from localStorage:', error);
+        return null;
+    }
+};
+
+// Save model to localStorage
+const saveModelToStorage = (model: SystemModel | null) => {
+    try {
+        if (model) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(model));
+        } else {
+            localStorage.removeItem(STORAGE_KEY);
+        }
+    } catch (error) {
+        console.error('Failed to save model to localStorage:', error);
+    }
+};
+
+// Load stored simulations from localStorage
+const loadSimulationsFromStorage = (): StoredSimulation[] => {
+    try {
+        const stored = localStorage.getItem(SIMULATIONS_STORAGE_KEY);
+        if (stored) {
+            const sims = JSON.parse(stored);
+            // Convert timestamp strings back to Date objects
+            return sims.map((s: StoredSimulation) => ({
+                ...s,
+                timestamp: new Date(s.timestamp)
+            }));
+        }
+        return [];
+    } catch (error) {
+        console.error('Failed to load simulations from localStorage:', error);
+        return [];
+    }
+};
+
+// Save stored simulations to localStorage
+const saveSimulationsToStorage = (simulations: StoredSimulation[]) => {
+    try {
+        localStorage.setItem(SIMULATIONS_STORAGE_KEY, JSON.stringify(simulations));
+    } catch (error) {
+        console.error('Failed to save simulations to localStorage:', error);
+    }
+};
+
+// Load simulation result from localStorage
+const loadSimulationResultFromStorage = (): SimulationResult | null => {
+    try {
+        const stored = localStorage.getItem(SIMULATION_RESULT_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+        console.error('Failed to load simulation result from localStorage:', error);
+        return null;
+    }
+};
+
+// Save simulation result to localStorage
+const saveSimulationResultToStorage = (result: SimulationResult | null) => {
+    try {
+        if (result) {
+            localStorage.setItem(SIMULATION_RESULT_KEY, JSON.stringify(result));
+        } else {
+            localStorage.removeItem(SIMULATION_RESULT_KEY);
+        }
+    } catch (error) {
+        console.error('Failed to save simulation result to localStorage:', error);
+    }
+};
 
 export const useStore = create<AppState>((set, get) => ({
-    model: null,
-    simulationResult: null,
+    model: loadModelFromStorage(), // Load from localStorage on init
+    simulationResult: loadSimulationResultFromStorage(), // Load simulation result from localStorage
+    storedSimulations: loadSimulationsFromStorage(), // Load stored simulations
     isLoading: false,
     selectedNode: null,
+    useV7: false, // Default to V5 for speed
 
-    setModel: (model) => set({ model }),
+    setModel: (model) => {
+        set({ model });
+        saveModelToStorage(model);
+    },
 
     generateModel: async (description) => {
+        const { useV7 } = get();
         set({ isLoading: true });
         try {
-            const response = await axios.post(`${API_URL}/generate`, { description });
+            // Add ?use_v7=true query parameter if V7 is enabled
+            const url = useV7
+                ? `${API_URL}/generate?use_v7=true`
+                : `${API_URL}/generate`;
+
+            const response = await axios.post(url, { description });
             if (response.data.success) {
-                set({ model: response.data.model });
+                const model = response.data.model;
+                set({ model });
+                saveModelToStorage(model); // Persist to localStorage
             }
         } catch (error) {
             console.error("Generation failed", error);
@@ -55,13 +165,37 @@ export const useStore = create<AppState>((set, get) => ({
             });
 
             if (response.data.success) {
-                set({
-                    simulationResult: {
-                        time_points: response.data.time_points,
-                        history: response.data.history,
-                        final_state: response.data.final_state
-                    }
+                console.log('Simulation result received:', response.data);
+                const result: SimulationResult = {
+                    time_points: response.data.time_points,
+                    history: response.data.history,
+                    final_state: response.data.final_state
+                };
+                set({ simulationResult: result });
+                saveSimulationResultToStorage(result); // Persist to localStorage
+                
+                // Auto-store the simulation
+                const { storedSimulations } = get();
+                const variables: string[] = [];
+                Object.entries(model.entities).forEach(([entityName, entity]) => {
+                    Object.keys(entity.components).forEach(compName => {
+                        variables.push(`${entityName}.${compName}`);
+                    });
                 });
+                
+                const newSim: StoredSimulation = {
+                    id: `sim-${Date.now()}`,
+                    name: `Simulation ${storedSimulations.length + 1}`,
+                    timestamp: new Date(),
+                    result: JSON.parse(JSON.stringify(result)),
+                    variables
+                };
+                
+                const newSimulations = [...storedSimulations, newSim];
+                set({ storedSimulations: newSimulations });
+                saveSimulationsToStorage(newSimulations);
+                
+                console.log('Simulation result stored:', get().simulationResult);
             }
         } catch (error) {
             console.error("Simulation failed", error);
@@ -81,9 +215,102 @@ export const useStore = create<AppState>((set, get) => ({
                 newModel.entities[entityName].components[componentName].initial = value;
             }
 
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    updateComponentParameter: (path, values) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const [entityName, componentName] = path.split('.');
+            const newModel = JSON.parse(JSON.stringify(state.model));
+
+            if (newModel.entities[entityName]?.components[componentName]) {
+                newModel.entities[entityName].components[componentName].initial = values.initial;
+                newModel.entities[entityName].components[componentName].min = values.min;
+                newModel.entities[entityName].components[componentName].max = values.max;
+            }
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    updateInfluence: (componentPath, influenceIndex, updates) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const [entityName, componentName] = componentPath.split('.');
+            const newModel = JSON.parse(JSON.stringify(state.model));
+
+            if (newModel.entities[entityName]?.components[componentName]) {
+                const influence = newModel.entities[entityName].components[componentName].influences[influenceIndex];
+                if (influence) {
+                    Object.assign(influence, updates);
+                }
+            }
+
+            saveModelToStorage(newModel);
+            return { model: newModel };
+        });
+    },
+
+    updateSimulationConfig: (updates) => {
+        set((state) => {
+            if (!state.model) return state;
+
+            const newModel = JSON.parse(JSON.stringify(state.model));
+            Object.assign(newModel.simulation, updates);
+
+            saveModelToStorage(newModel);
             return { model: newModel };
         });
     },
 
     selectNode: (id) => set({ selectedNode: id }),
+
+    toggleV7: () => set((state) => ({ useV7: !state.useV7 })),
+
+    storeSimulation: (name?: string) => {
+        const { simulationResult, model, storedSimulations } = get();
+        if (!simulationResult || !model) return;
+
+        // Extract variable names from model
+        const variables: string[] = [];
+        Object.entries(model.entities).forEach(([entityName, entity]) => {
+            Object.keys(entity.components).forEach(compName => {
+                variables.push(`${entityName}.${compName}`);
+            });
+        });
+
+        const newSim: StoredSimulation = {
+            id: `sim-${Date.now()}`,
+            name: name || `Simulation ${storedSimulations.length + 1}`,
+            timestamp: new Date(),
+            result: JSON.parse(JSON.stringify(simulationResult)),
+            variables
+        };
+
+        const newSimulations = [...storedSimulations, newSim];
+        set({ storedSimulations: newSimulations });
+        saveSimulationsToStorage(newSimulations);
+    },
+
+    removeStoredSimulation: (id: string) => {
+        const { storedSimulations } = get();
+        const newSimulations = storedSimulations.filter(s => s.id !== id);
+        set({ storedSimulations: newSimulations });
+        saveSimulationsToStorage(newSimulations);
+    },
+
+    renameStoredSimulation: (id: string, name: string) => {
+        const { storedSimulations } = get();
+        const newSimulations = storedSimulations.map(s => 
+            s.id === id ? { ...s, name } : s
+        );
+        set({ storedSimulations: newSimulations });
+        saveSimulationsToStorage(newSimulations);
+    },
 }));

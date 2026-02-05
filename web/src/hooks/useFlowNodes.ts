@@ -1,21 +1,33 @@
-import { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useNodesState, useEdgesState, MarkerType } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import { useStore } from '../store/useStore';
 
 export const useFlowNodes = () => {
-    const { model, selectNode } = useStore();
-    const [nodes, setNodes, onNodesChange] = useNodesState([]);
-    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const { model, selectedNode } = useStore();
+    const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+    // Store entity dimensions to preserve resizing
+    const entityDimensionsRef = React.useRef<Map<string, { width: number, height: number }>>(new Map());
 
     useEffect(() => {
         if (!model) return;
+
+        // Capture current dimensions before updating
+        nodes.forEach(node => {
+            if (node.type === 'group' && node.style?.width && node.style?.height) {
+                entityDimensionsRef.current.set(node.id, {
+                    width: node.style.width as number,
+                    height: node.style.height as number,
+                });
+            }
+        });
 
         const newNodes: Node[] = [];
         const newEdges: Edge[] = [];
 
         let entityX = 0;
-        const ENTITY_WIDTH = 300;
         const ENTITY_GAP = 50;
 
         // Build a map of all component names to their full paths
@@ -31,33 +43,56 @@ export const useFlowNodes = () => {
         Object.entries(model.entities).forEach(([entityName, entity]) => {
             // Parent Node for Entity
             const entityId = entityName;
+
+            // Calculate dynamic dimensions based on component count
+            const componentCount = Object.keys(entity.components).length;
+            const COMP_HEIGHT = 60;
+            const COMP_GAP = 20;
+            const PADDING = 30;
+            const HEADER_HEIGHT = 50;
+
+            // Formula: taille de base pour 4 composants minimum
+            // Scaling plus agressif pour les entités avec beaucoup de composants
+            const baseComponentCount = Math.max(4, componentCount);
+
+            // Largeur: augmente linéairement avec le nombre de composants
+            // Base: 450px pour 4 composants, +60px par composant supplémentaire
+            const BASE_WIDTH = 450;
+            const WIDTH_PER_COMPONENT = componentCount > 4 ? (componentCount - 4) * 60 : 0;
+            const calculatedWidth = BASE_WIDTH + WIDTH_PER_COMPONENT;
+
+            // Hauteur: basée sur le nombre réel de composants à afficher
+            const calculatedHeight = HEADER_HEIGHT + (COMP_HEIGHT + COMP_GAP) * baseComponentCount + PADDING * 2;
+
+            // Check if we have saved dimensions for this entity (from manual resizing)
+            const savedDimensions = entityDimensionsRef.current.get(entityId);
+
             newNodes.push({
                 id: entityId,
                 type: 'group',
                 position: { x: entityX, y: 0 },
-                style: { 
-                    width: ENTITY_WIDTH,
-                    height: 400,
+                style: {
+                    width: savedDimensions?.width || calculatedWidth,
+                    height: savedDimensions?.height || calculatedHeight,
                     backgroundColor: 'rgba(0,0,0,0.05)',
                     borderRadius: 8,
                     border: '1px dashed #ccc',
                     minWidth: 200,
                     minHeight: 200,
                 },
-                data: { 
+                data: {
                     label: entityName,
-                    resizable: true 
+                    resizable: true
                 },
             });
 
             // Component Nodes
-            let compY = 40;
-            const COMP_HEIGHT = 60;
-            const COMP_GAP = 20;
-            const PADDING = 20;
+            let compY = HEADER_HEIGHT;
+            const parentWidth = savedDimensions?.width || calculatedWidth;
 
             Object.entries(entity.components).forEach(([compName, comp]) => {
                 const compId = `${entityName}.${compName}`;
+
                 newNodes.push({
                     id: compId,
                     parentId: entityId,
@@ -67,20 +102,15 @@ export const useFlowNodes = () => {
                         label: compName,
                         type: comp.type,
                         value: comp.initial,
+                        min: comp.min,
+                        max: comp.max,
+                        entityName,
                     },
                     style: {
-                        width: ENTITY_WIDTH - (PADDING * 2),
+                        width: parentWidth - (PADDING * 2),
                         height: COMP_HEIGHT,
-                        backgroundColor: 'white',
-                        border: '1px solid #ddd',
-                        borderRadius: 4,
-                        padding: 10,
-                        fontSize: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
                     },
-                    type: 'default',
+                    type: 'component', // Use custom component node type
                 });
 
                 compY += COMP_HEIGHT + COMP_GAP;
@@ -121,13 +151,13 @@ export const useFlowNodes = () => {
                         inf.kind === 'negative' ? '#ef4444' : '#f59e0b';
 
                     const edgeId = `e-${sourceId}-${compId}-${inf.kind}`;
-                    
+
                     newEdges.push({
                         id: edgeId,
                         source: sourceId,
                         target: compId,
                         animated: inf.enabled,
-                        style: { 
+                        style: {
                             stroke: color,
                             strokeWidth: 2,
                             opacity: inf.enabled ? 1 : 0.3
@@ -142,7 +172,7 @@ export const useFlowNodes = () => {
                 });
             });
 
-            entityX += ENTITY_WIDTH + ENTITY_GAP;
+            entityX += (savedDimensions?.width || calculatedWidth) + ENTITY_GAP;
         });
 
         setNodes(newNodes);
@@ -150,5 +180,65 @@ export const useFlowNodes = () => {
 
     }, [model]);
 
-    return { nodes, edges, onNodesChange, onEdgesChange };
+    // Apply highlighting based on selected node
+    const highlightedNodes = useMemo(() => {
+        if (!selectedNode) return nodes;
+
+        // Get all connected node IDs
+        const connectedNodeIds = new Set<string>();
+
+        edges.forEach(edge => {
+            if (edge.source === selectedNode || edge.target === selectedNode) {
+                connectedNodeIds.add(edge.source);
+                connectedNodeIds.add(edge.target);
+            }
+        });
+
+        return nodes.map(node => {
+            const isConnected = connectedNodeIds.has(node.id);
+            const isSelected = node.id === selectedNode;
+
+            if (node.type === 'component') {
+                return {
+                    ...node,
+                    style: {
+                        ...node.style,
+                        opacity: (isConnected || isSelected) ? 1 : 0.4,
+                        border: isConnected ? '3px solid #3b82f6' : undefined,
+                    },
+                };
+            }
+
+            return node;
+        });
+    }, [nodes, edges, selectedNode]);
+
+    const highlightedEdges = useMemo(() => {
+        if (!selectedNode) return edges;
+
+        return edges.map(edge => {
+            const isConnected = edge.source === selectedNode || edge.target === selectedNode;
+
+            return {
+                ...edge,
+                style: {
+                    ...edge.style,
+                    stroke: isConnected ? '#3b82f6' : edge.style?.stroke,
+                    strokeWidth: isConnected ? 4 : 2,
+                    opacity: isConnected ? 1 : 0.2,
+                },
+                markerEnd: isConnected ? {
+                    type: MarkerType.ArrowClosed,
+                    color: '#3b82f6',
+                } : edge.markerEnd,
+            };
+        });
+    }, [edges, selectedNode]);
+
+    return {
+        nodes: highlightedNodes,
+        edges: highlightedEdges,
+        onNodesChange,
+        onEdgesChange
+    };
 };

@@ -50,6 +50,17 @@ class SimulateResponse(BaseModel):
     final_state: Optional[Dict[str, float]] = None
     error: Optional[str] = None
 
+class MultiSimulateRequest(BaseModel):
+    """Request to run multiple simulations with different configurations."""
+    configs: List[Dict[str, Any]]  # List of simulation configurations
+    base_model: Dict[str, Any]  # Base system model
+
+class MultiSimulateResponse(BaseModel):
+    """Response containing multiple simulation results."""
+    success: bool
+    results: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None
+
 class CompareRequest(BaseModel):
     """Request to compare multiple scenarios."""
     model: Dict[str, Any]
@@ -114,11 +125,15 @@ async def root():
 
 
 @app.post("/generate", response_model=GenerateResponse)
-async def generate_model(request: GenerateRequest):
+async def generate_model(request: GenerateRequest, use_v7: bool = False):
     """
     Generate a SystemModel from natural language description.
     
     Uses Mistral AI or OpenAI to interpret the description.
+    
+    Query Parameters:
+    - use_v7: If True, uses the Multi-Agent System V7 pipeline (slower but more thorough)
+              If False, uses the legacy V5 single-LLM pipeline (default, faster)
     """
     try:
         config = get_llm_config()
@@ -128,11 +143,22 @@ async def generate_model(request: GenerateRequest):
                 detail="No LLM API key configured (MISTRAL_API_KEY or OPENAI_API_KEY)"
             )
         
-        model = generate_system_model(request.description, llm_config=config)
+        if use_v7:
+            # Use Multi-Agent System V7
+            from orchestrator import build_system_model
+            model = build_system_model(request.description, llm_config=config)
+            generation_mode = "v7"
+        else:
+            # Use legacy V5 single-LLM pipeline
+            model = generate_system_model(request.description, llm_config=config)
+            generation_mode = "v5"
+        
+        result = model.model_dump(by_alias=True)
+        result["generation_mode"] = generation_mode  # Add mode indicator
         
         return GenerateResponse(
             success=True,
-            model=model.model_dump(by_alias=True)
+            model=result
         )
     except Exception as e:
         return GenerateResponse(
@@ -222,6 +248,74 @@ async def get_entity_variables(entity: str, model: str):
         }
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON model")
+
+
+@app.post("/simulate-batch", response_model=MultiSimulateResponse)
+async def simulate_batch(request: MultiSimulateRequest):
+    """
+    Run multiple simulations sequentially with different configurations.
+    Each config can override:
+    - dt, steps (simulation settings)
+    - parameter values (component initial values)
+    """
+    try:
+        results = []
+        
+        for idx, config in enumerate(request.configs):
+            # Create a copy of the base model
+            model_dict = request.base_model.copy()
+            
+            # Deep copy entities to avoid mutation
+            import copy
+            model_dict['entities'] = copy.deepcopy(request.base_model['entities'])
+            model_dict['simulation'] = copy.deepcopy(request.base_model['simulation'])
+            
+            # Apply simulation settings overrides
+            if 'dt' in config:
+                model_dict['simulation']['dt'] = config['dt']
+            if 'steps' in config:
+                model_dict['simulation']['steps'] = config['steps']
+            
+            # Apply parameter overrides
+            if 'parameter_overrides' in config:
+                for path, value in config['parameter_overrides'].items():
+                    parts = path.split('.')
+                    if len(parts) == 2:
+                        entity_name, comp_name = parts
+                        if entity_name in model_dict['entities']:
+                            if comp_name in model_dict['entities'][entity_name]['components']:
+                                model_dict['entities'][entity_name]['components'][comp_name]['initial'] = value
+            
+            # Parse and run simulation
+            model = SystemModel.model_validate(model_dict)
+            result = simulate(
+                model,
+                steps=model_dict['simulation']['steps'],
+                dt=model_dict['simulation']['dt']
+            )
+            
+            # Add config metadata to result
+            results.append({
+                'config_id': config.get('id', f'config_{idx}'),
+                'config_name': config.get('name', f'Configuration {idx + 1}'),
+                'time_points': result.time_points,
+                'history': result.history,
+                'final_state': result.final_state
+            })
+        
+        return MultiSimulateResponse(
+            success=True,
+            results=results
+        )
+    
+    except Exception as e:
+        print(f"Multi-simulation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return MultiSimulateResponse(
+            success=False,
+            error=str(e)
+        )
 
 
 # =============================================================================

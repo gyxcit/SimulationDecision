@@ -3,14 +3,18 @@ import { TopBar } from './components/TopBar';
 import { Navigator } from './components/Navigator';
 import { Flow } from './components/canvas/Flow';
 import { Inspector } from './components/Inspector';
-import { ResultsPanel } from './components/ResultsPanel';
+import { SimulationResults } from './components/SimulationResults';
+import { SimulationsManager } from './components/SimulationsManager';
+import { VisualizationView } from './components/VisualizationPanel';
 import { useStore } from './store/useStore';
 import { Wand2 } from 'lucide-react';
 
 function App() {
-  const { model, generateModel, isLoading } = useStore();
+  const { model, generateModel, isLoading, useV7, toggleV7 } = useStore();
   const [prompt, setPrompt] = useState('');
   const [showPrompt, setShowPrompt] = useState(!model); // Show if no model
+  const [inspectorVisible, setInspectorVisible] = useState(true);
+  const [activeView, setActiveView] = useState<'canvas' | 'simulations' | 'visualization'>('canvas');
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,78 +26,145 @@ function App() {
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-foreground overflow-hidden">
       {/* Top Bar */}
-      <TopBar />
+      <TopBar
+        currentView={activeView}
+        onNavigateHome={() => setActiveView('canvas')}
+      />
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Navigator (now self-managing width) */}
-        <div className="flex flex-col">
-          <Navigator />
-          <div className="p-4 border-t border-r bg-card">
+        {/* Left Sidebar: Navigator - Always visible */}
+        <div className="flex flex-col border-r">
+          <Navigator
+            onViewChange={setActiveView}
+            currentView={activeView}
+          />
+          <div className="p-2 border-t bg-card flex items-center justify-center">
             <button
               onClick={() => setShowPrompt(true)}
-              className="w-full flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground py-2 rounded-md text-sm font-medium transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-md transition-colors hover:bg-accent text-muted-foreground"
+              title="New Model"
             >
-              <Wand2 className="w-4 h-4" />
-              New Model
+              <Wand2 className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Center: Canvas & Bottom Results */}
+        {/* Center: Canvas & Bottom Results OR Simulations Full Page */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 relative">
-            <Flow />
+          {activeView === 'canvas' ? (
+            <>
+              <div className="flex-1 relative">
+                {/* Inspector Toggle Button */}
+                <button
+                  onClick={() => setInspectorVisible(!inspectorVisible)}
+                  className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg flex items-center justify-center transition-all hover:scale-110"
+                  title={inspectorVisible ? "Masquer l'inspecteur" : "Afficher l'inspecteur"}
+                >
+                  {inspectorVisible ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  )}
+                </button>
 
-            {/* Generator Overlay */}
-            {showPrompt && (
-              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-card w-full max-w-lg p-6 rounded-xl shadow-2xl border">
-                  <h2 className="text-2xl font-bold mb-2">Generate System Model</h2>
-                  <p className="text-muted-foreground mb-4 text-sm">
-                    Describe your dynamic system in plain English. The AI will convert it into a simulated model.
-                  </p>
-                  <form onSubmit={handleGenerate}>
-                    <textarea
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      className="w-full h-32 p-3 rounded-md border bg-background mb-4 focus:ring-2 ring-primary outline-none resize-none"
-                      placeholder="e.g. A predator-prey system with Rabbits and Foxes. Rabbits reproduce rapidly but are eaten by Foxes..."
-                    />
-                    <div className="flex justify-end gap-3">
-                      {model && (
-                        <button
-                          type="button"
-                          onClick={() => setShowPrompt(false)}
-                          className="px-4 py-2 text-sm font-medium hover:bg-accent rounded-md"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={isLoading || !prompt.trim()}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isLoading && <span className="animate-spin">⏳</span>}
-                        {isLoading ? 'Generating...' : 'Generate Model'}
-                      </button>
+                <Flow />
+
+                {/* Generator Overlay */}
+                {showPrompt && (
+                  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-card w-full max-w-lg p-6 rounded-xl shadow-2xl border">
+                      <h2 className="text-2xl font-bold mb-2">Generate System Model</h2>
+                      <p className="text-muted-foreground mb-4 text-sm">
+                        Describe your dynamic system in plain English. The AI will convert it into a simulated model.
+                      </p>
+                      <form onSubmit={handleGenerate}>
+                        <textarea
+                          value={prompt}
+                          onChange={(e) => setPrompt(e.target.value)}
+                          className="w-full h-32 p-3 rounded-md border bg-background mb-4 focus:ring-2 ring-primary outline-none resize-none"
+                          placeholder="e.g. A predator-prey system with Rabbits and Foxes. Rabbits reproduce rapidly but are eaten by Foxes..."
+                        />
+
+                        {/* V7 Toggle */}
+                        <div className="mb-4 p-3 bg-accent/20 rounded-md border border-accent/30">
+                          <label className="flex items-center justify-between cursor-pointer">
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">
+                                {useV7 ? '🚀 Multi-Agent V7' : '⚡ Single-LLM V5'}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {useV7
+                                  ? 'Thorough analysis with 8 agents (~30-90s)'
+                                  : 'Fast generation (~5-15s)'}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={toggleV7}
+                              className={`ml-3 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${useV7 ? 'bg-primary' : 'bg-muted'
+                                }`}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useV7 ? 'translate-x-6' : 'translate-x-1'
+                                  }`}
+                              />
+                            </button>
+                          </label>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                          {model && (
+                            <button
+                              type="button"
+                              onClick={() => setShowPrompt(false)}
+                              className="px-4 py-2 text-sm font-medium hover:bg-accent rounded-md"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={isLoading || !prompt.trim()}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {isLoading && <span className="animate-spin">⏳</span>}
+                            {isLoading ? (useV7 ? 'Running V7...' : 'Generating...') : 'Generate Model'}
+                          </button>
+                        </div>
+                      </form>
                     </div>
-                  </form>
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Bottom Results Panel */}
-          <div className="h-64 border-t bg-card">
-            <ResultsPanel />
-          </div>
+              {/* Bottom Results Panel - Resizable */}
+              <div className="h-64 border-t bg-card resize-y overflow-auto" style={{ minHeight: '100px', maxHeight: '600px' }}>
+                <SimulationResults />
+              </div>
+            </>
+          ) : activeView === 'simulations' ? (
+            <div className="h-full overflow-hidden">
+              <SimulationsManager />
+            </div>
+          ) : (
+            <div className="h-full overflow-hidden">
+              <VisualizationView />
+            </div>
+          )}
         </div>
 
-        {/* Right Sidebar: Inspector */}
-        <div className="w-80 border-l bg-card">
-          <Inspector />
-        </div>
+        {/* Right Sidebar: Inspector - Only shown in canvas view */}
+        {activeView === 'canvas' && inspectorVisible && (
+          <div className="w-80 border-l bg-card resize-x overflow-auto" style={{ minWidth: '200px', maxWidth: '600px' }}>
+            <Inspector />
+          </div>
+        )}
       </div>
     </div>
   );

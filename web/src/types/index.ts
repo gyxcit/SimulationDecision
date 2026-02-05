@@ -1,5 +1,5 @@
 export type InfluenceKind = "positive" | "negative" | "decay" | "ratio";
-export type InfluenceFunction = "linear" | "sigmoid" | "threshold" | "division";
+export type InfluenceFunction = "linear" | "sigmoid" | "threshold" | "division" | "square" | "cubic" | "sqrt" | "exponential" | "logarithmic" | "inverse_square";
 export type ComponentType = "state" | "computed" | "constant";
 
 export interface Influence {
