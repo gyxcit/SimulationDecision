@@ -13,9 +13,13 @@ import {
     ChevronRight,
     Check,
     GitCompare,
-    PieChart
+    PieChart,
+    Brain,
+    Sparkles
 } from 'lucide-react';
 import type { SimulationResult } from '../types';
+import { AdvancedCharts } from './AdvancedCharts';
+import { VIEW_MODE_CONFIGS } from '../lib/viewModes';
 
 type ChartType = 'timeSeries' | 'phaseSpace' | 'distribution' | 'comparison' | 'rates' | 'correlation' | 'multiSimComparison';
 
@@ -101,10 +105,11 @@ export const VisualizationPanel: React.FC = () => {
 
 // Full page visualization view
 export const VisualizationView: React.FC = () => {
-    const { simulationResult, model, storedSimulations } = useStore();
+    const { simulationResult, model, storedSimulations, viewMode } = useStore();
     const [selectedCharts, setSelectedCharts] = useState<ChartType[]>(['timeSeries']);
     const [fullscreenChart, setFullscreenChart] = useState<ChartType | null>(null);
     const [activeChartForConfig, setActiveChartForConfig] = useState<ChartType | null>('timeSeries');
+    const [showDeepAnalysis, setShowDeepAnalysis] = useState(false);
     
     // Per-chart variable selection - use Set for better tracking
     const [chartVariables, setChartVariables] = useState<Record<ChartType, Set<string>>>({
@@ -1042,6 +1047,41 @@ export const VisualizationView: React.FC = () => {
                             </div>
                         ))}
                     </div>
+
+                    {/* Deep Analysis Section */}
+                    <div className="border-t pt-3 mt-3">
+                        <button
+                            onClick={() => setShowDeepAnalysis(!showDeepAnalysis)}
+                            className={cn(
+                                "w-full flex items-center gap-2 p-2 rounded-md text-left transition-colors text-sm",
+                                showDeepAnalysis
+                                    ? "bg-gradient-to-r from-purple-500/20 to-blue-500/20 text-purple-400 border border-purple-500/30"
+                                    : "hover:bg-accent text-muted-foreground"
+                            )}
+                        >
+                            <div className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center",
+                                showDeepAnalysis 
+                                    ? "bg-gradient-to-br from-purple-500 to-blue-600" 
+                                    : "bg-accent"
+                            )}>
+                                <Brain className={cn("w-4 h-4", showDeepAnalysis && "text-white")} />
+                            </div>
+                            <div className="flex-1">
+                                <div className="font-medium flex items-center gap-1">
+                                    {VIEW_MODE_CONFIGS[viewMode].advancedLabel}
+                                    <Sparkles className="w-3 h-3 text-purple-400" />
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    {viewMode === 'technical' ? 'Analyse approfondie du système' :
+                                     viewMode === 'executive' ? 'Insights stratégiques' :
+                                     viewMode === 'investor' ? 'Analyse des risques' :
+                                     'Opportunités commerciales'}
+                                </div>
+                            </div>
+                            {showDeepAnalysis ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        </button>
+                    </div>
                     
                     {/* Stored simulations section */}
                     <div className="border-t pt-3 mt-3">
@@ -1087,57 +1127,76 @@ export const VisualizationView: React.FC = () => {
                 {/* Header */}
                 <div className="p-4 border-b bg-card flex items-center justify-between">
                     <div>
-                        <h1 className="text-xl font-bold">Analyse & Visualisation</h1>
+                        <h1 className="text-xl font-bold">
+                            {showDeepAnalysis ? VIEW_MODE_CONFIGS[viewMode].advancedLabel : 'Analyse & Visualisation'}
+                        </h1>
                         <p className="text-sm text-muted-foreground">
                             {simulationResult.time_points.length} points de données • {variables.length} variables
+                            {showDeepAnalysis && (
+                                <span className="ml-2 text-purple-400">• Mode {VIEW_MODE_CONFIGS[viewMode].name}</span>
+                            )}
                         </p>
                     </div>
+                    {showDeepAnalysis && (
+                        <button
+                            onClick={() => setShowDeepAnalysis(false)}
+                            className="text-xs px-3 py-1.5 bg-accent hover:bg-accent/80 rounded-md transition-colors"
+                        >
+                            ← Retour aux graphiques
+                        </button>
+                    )}
                 </div>
 
-                {/* Charts Grid */}
+                {/* Charts Grid or Deep Analysis */}
                 <div className="flex-1 overflow-auto p-4">
-                    <div className={cn(
-                        "grid gap-4",
-                        selectedCharts.length === 1 ? "grid-cols-1" :
-                        selectedCharts.length === 2 ? "grid-cols-1 lg:grid-cols-2" :
-                        "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-                    )}>
-                        {selectedCharts.map(chartType => {
-                            const chartConfig = CHART_TYPES.find(c => c.id === chartType);
-                            return (
-                                <div key={chartType} className="bg-card rounded-lg border p-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center gap-2">
-                                            {chartConfig?.icon}
-                                            <h3 className="font-medium">{chartConfig?.name}</h3>
+                    {showDeepAnalysis ? (
+                        <AdvancedCharts />
+                    ) : (
+                        <>
+                            <div className={cn(
+                                "grid gap-4",
+                                selectedCharts.length === 1 ? "grid-cols-1" :
+                                selectedCharts.length === 2 ? "grid-cols-1 lg:grid-cols-2" :
+                                "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                            )}>
+                                {selectedCharts.map(chartType => {
+                                    const chartConfig = CHART_TYPES.find(c => c.id === chartType);
+                                    return (
+                                        <div key={chartType} className="bg-card rounded-lg border p-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    {chartConfig?.icon}
+                                                    <h3 className="font-medium">{chartConfig?.name}</h3>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                    <button 
+                                                        className="p-1 hover:bg-accent rounded transition-colors"
+                                                        title="Plein écran"
+                                                        onClick={() => setFullscreenChart(chartType)}
+                                                    >
+                                                        <Maximize2 className="w-4 h-4 text-muted-foreground" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="h-64 overflow-hidden">
+                                                {renderChart(chartType)}
+                                            </div>
                                         </div>
-                                        <div className="flex gap-1">
-                                            <button 
-                                                className="p-1 hover:bg-accent rounded transition-colors"
-                                                title="Plein écran"
-                                                onClick={() => setFullscreenChart(chartType)}
-                                            >
-                                                <Maximize2 className="w-4 h-4 text-muted-foreground" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="h-64 overflow-hidden">
-                                        {renderChart(chartType)}
+                                    );
+                                })}
+                            </div>
+
+                            {selectedCharts.length === 0 && !showDeepAnalysis && (
+                                <div className="h-full flex items-center justify-center">
+                                    <div className="text-center">
+                                        <PieChart className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
+                                        <p className="text-muted-foreground">
+                                            Sélectionnez des graphiques à afficher dans le panneau de gauche
+                                        </p>
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
-
-                    {selectedCharts.length === 0 && (
-                        <div className="h-full flex items-center justify-center">
-                            <div className="text-center">
-                                <PieChart className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-                                <p className="text-muted-foreground">
-                                    Sélectionnez des graphiques à afficher dans le panneau de gauche
-                                </p>
-                            </div>
-                        </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

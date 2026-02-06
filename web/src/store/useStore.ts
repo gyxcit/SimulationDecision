@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { SystemModel, SimulationResult, Influence } from '../types';
+import type { ViewMode } from '../lib/viewModes';
 import axios from 'axios';
 
 // Stored simulation for comparison
@@ -27,6 +28,7 @@ interface AppState {
     selectedNode: string | null; // "Entity.Component" or "Entity"
     useV7: boolean; // Toggle between V5 and V7 pipeline
     showEntityBoxes: boolean; // Toggle entity boxes visibility on canvas
+    viewMode: ViewMode; // View mode for different audiences
 
     // Actions
     setModel: (model: SystemModel) => void;
@@ -46,6 +48,7 @@ interface AppState {
     selectNode: (id: string | null) => void;
     toggleV7: () => void;
     toggleEntityBoxes: () => void;
+    setViewMode: (mode: ViewMode) => void;
     storeSimulation: (name?: string) => void;
     removeStoredSimulation: (id: string) => void;
     renameStoredSimulation: (id: string, name: string) => void;
@@ -140,6 +143,7 @@ export const useStore = create<AppState>((set, get) => ({
     selectedNode: null,
     useV7: false, // Default to V5 for speed
     showEntityBoxes: true, // Show entity boxes by default
+    viewMode: 'executive' as ViewMode, // Default view mode for business users
 
     setModel: (model) => {
         set({ model });
@@ -483,6 +487,8 @@ export const useStore = create<AppState>((set, get) => ({
     toggleV7: () => set((state) => ({ useV7: !state.useV7 })),
 
     toggleEntityBoxes: () => set((state) => ({ showEntityBoxes: !state.showEntityBoxes })),
+
+    setViewMode: (mode) => set({ viewMode: mode }),
 
     storeSimulation: (name?: string) => {
         const { simulationResult, model, storedSimulations } = get();

@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, RotateCcw, Download, Upload, Activity, Home, Box, Layers } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
+import { ViewModeSelector } from './ViewModeSelector';
 
 interface TopBarProps {
     currentView?: 'canvas' | 'simulations' | 'visualization';
@@ -94,6 +95,11 @@ export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNaviga
                             readOnly
                         />
                     </div>
+                </div>
+
+                {/* View Mode Selector */}
+                <div className="border-l pl-4">
+                    <ViewModeSelector />
                 </div>
             </div>
 

@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
 import type { Component, Influence } from '../types';
-import { Calculator, List, Plus, Trash2, X } from 'lucide-react';
+import { Calculator, List, Plus, Trash2, X, Eye } from 'lucide-react';
+import { getDisplayLabel, formatValue, VIEW_MODE_CONFIGS } from '../lib/viewModes';
+import { cn } from '../lib/utils';
 
 export const Inspector: React.FC = () => {
-    const { model, selectedNode, updateParameter } = useStore();
+    const { model, selectedNode, updateParameter, viewMode } = useStore();
+    const config = VIEW_MODE_CONFIGS[viewMode];
 
     if (!model || !selectedNode) return (
         <div className="p-8 text-center text-muted-foreground text-sm">
@@ -48,9 +51,12 @@ interface ComponentInspectorProps {
 }
 
 const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, component, onUpdate }) => {
-    const { model } = useStore();
-    const [viewMode, setViewMode] = useState<'list' | 'equation'>('list');
+    const { model, viewMode } = useStore();
+    const [inspectorViewMode, setInspectorViewMode] = useState<'list' | 'equation'>('list');
     const [showAddInfluence, setShowAddInfluence] = useState(false);
+    
+    const config = VIEW_MODE_CONFIGS[viewMode];
+    const displayName = getDisplayLabel(path, viewMode);
 
     // Get all possible source variables (excluding self)
     const allVariables: string[] = [];
@@ -68,10 +74,15 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
     return (
         <div className="h-full overflow-y-auto">
             <div className="p-4 border-b">
-                <span className="text-xs font-mono text-muted-foreground bg-accent px-1.5 py-0.5 rounded">
-                    {path}
-                </span>
-                <h2 className="text-xl font-bold mt-2">{name}</h2>
+                {config.showRawValues && (
+                    <span className="text-xs font-mono text-muted-foreground bg-accent px-1.5 py-0.5 rounded">
+                        {path}
+                    </span>
+                )}
+                <h2 className="text-xl font-bold mt-2">{displayName}</h2>
+                {!config.showRawValues && (
+                    <p className="text-xs text-muted-foreground mt-1">{name}</p>
+                )}
                 <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 capitalize">
                         {component.type}
@@ -80,17 +91,35 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
             </div>
 
             <div className="p-4 space-y-6">
+                {/* Current Value Display (for non-technical modes) */}
+                {!config.showRawValues && (
+                    <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                        <p className="text-xs text-muted-foreground">
+                            {viewMode === 'executive' ? 'Current Performance' : 
+                             viewMode === 'investor' ? 'Current Index' : 'Current Score'}
+                        </p>
+                        <p className="text-2xl font-bold text-primary mt-1">
+                            {formatValue(component.initial, viewMode, component.min ?? 0, component.max ?? 1)}
+                        </p>
+                    </div>
+                )}
+
                 {/* Parameter Editing Section */}
                 <div className="space-y-3 pb-4 border-b">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                        Parameters
+                        {config.showRawValues ? 'Parameters' : 'Adjust Value'}
                     </h3>
 
                     {/* Initial Value */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium flex justify-between">
-                            Initial Value
-                            <span className="text-muted-foreground font-mono">{component.initial.toFixed(2)}</span>
+                            {config.showRawValues ? 'Initial Value' : 'Value'}
+                            <span className="text-muted-foreground font-mono">
+                                {config.showRawValues 
+                                    ? component.initial.toFixed(4) 
+                                    : formatValue(component.initial, viewMode, component.min ?? 0, component.max ?? 1)
+                                }
+                            </span>
                         </label>
                         <input
                             type="range"
@@ -102,56 +131,61 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
                             className="w-full accent-primary h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
                         />
                         <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>{component.min ?? 0}</span>
-                            <span>{component.max ?? 1}</span>
+                            <span>{config.showRawValues ? (component.min ?? 0) : formatValue(component.min ?? 0, viewMode, component.min ?? 0, component.max ?? 1)}</span>
+                            <span>{config.showRawValues ? (component.max ?? 1) : formatValue(component.max ?? 1, viewMode, component.min ?? 0, component.max ?? 1)}</span>
                         </div>
                     </div>
 
-                    {/* Min Value Editor */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium">Minimum Value</label>
-                        <input
-                            type="number"
-                            step="0.1"
-                            value={component.min ?? ''}
-                            onChange={(e) => {
-                                const { updateComponentParameter } = useStore.getState();
-                                updateComponentParameter(path, {
-                                    initial: component.initial,
-                                    min: e.target.value ? parseFloat(e.target.value) : null,
-                                    max: component.max ?? null,
-                                });
-                            }}
-                            className="w-full text-xs px-2 py-1.5 border rounded bg-background"
-                            placeholder="No minimum"
-                        />
-                    </div>
+                    {/* Min/Max Value Editors - Only show in technical mode */}
+                    {config.showRawValues && (
+                        <>
+                            {/* Min Value Editor */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium">Minimum Value</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={component.min ?? ''}
+                                    onChange={(e) => {
+                                        const { updateComponentParameter } = useStore.getState();
+                                        updateComponentParameter(path, {
+                                            initial: component.initial,
+                                            min: e.target.value ? parseFloat(e.target.value) : null,
+                                            max: component.max ?? null,
+                                        });
+                                    }}
+                                    className="w-full text-xs px-2 py-1.5 border rounded bg-background"
+                                    placeholder="No minimum"
+                                />
+                            </div>
 
-                    {/* Max Value Editor */}
-                    <div className="space-y-1">
-                        <label className="text-xs font-medium">Maximum Value</label>
-                        <input
-                            type="number"
-                            step="0.1"
-                            value={component.max ?? ''}
-                            onChange={(e) => {
-                                const { updateComponentParameter } = useStore.getState();
-                                updateComponentParameter(path, {
-                                    initial: component.initial,
-                                    min: component.min ?? null,
-                                    max: e.target.value ? parseFloat(e.target.value) : null,
-                                });
-                            }}
-                            className="w-full text-xs px-2 py-1.5 border rounded bg-background"
-                            placeholder="No maximum"
-                        />
-                    </div>
+                            {/* Max Value Editor */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium">Maximum Value</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={component.max ?? ''}
+                                    onChange={(e) => {
+                                        const { updateComponentParameter } = useStore.getState();
+                                        updateComponentParameter(path, {
+                                            initial: component.initial,
+                                            min: component.min ?? null,
+                                            max: e.target.value ? parseFloat(e.target.value) : null,
+                                        });
+                                    }}
+                                    className="w-full text-xs px-2 py-1.5 border rounded bg-background"
+                                    placeholder="No maximum"
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div className="space-y-2">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                            Influences
+                            {config.showFormulas ? 'Influences' : 'Factors'}
                             <span className="bg-secondary text-secondary-foreground text-[10px] px-1.5 rounded-full">
                                 {component.influences.length}
                             </span>
@@ -168,15 +202,15 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
                             {/* View Mode Toggle */}
                             <div className="flex items-center bg-secondary rounded-md p-0.5">
                                 <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`p-1 rounded ${viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-white/50'}`}
+                                    onClick={() => setInspectorViewMode('list')}
+                                    className={`p-1 rounded ${inspectorViewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-white/50'}`}
                                     title="List View"
                                 >
                                     <List className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                    onClick={() => setViewMode('equation')}
-                                    className={`p-1 rounded ${viewMode === 'equation' ? 'bg-white shadow-sm' : 'hover:bg-white/50'}`}
+                                    onClick={() => setInspectorViewMode('equation')}
+                                    className={`p-1 rounded ${inspectorViewMode === 'equation' ? 'bg-white shadow-sm' : 'hover:bg-white/50'}`}
                                     title="Equation View"
                                 >
                                     <Calculator className="w-3.5 h-3.5" />
@@ -185,7 +219,7 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
                         </div>
                     </h3>
 
-                    {viewMode === 'list' ? (
+                    {inspectorViewMode === 'list' ? (
                         <div className="space-y-2">
                             {component.influences.map((inf, i) => (
                                 <InfluenceEditor
