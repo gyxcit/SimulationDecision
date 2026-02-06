@@ -1,0 +1,30 @@
+# =============================================================================
+# Development override for docker-compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+# =============================================================================
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount backend code for hot reload
+      - ./backend:/app/backend
+    command: ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: build
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

@@ -15,10 +15,10 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 load_dotenv()
 
-from models import SystemModel
-from generator import generate_system_model
-from llm_client import LLMConfig
-from simulation import SimulationEngine, simulate, SimulationResult
+from .models import SystemModel
+from .generator import generate_system_model
+from .llm_client import LLMConfig
+from .simulation import SimulationEngine, simulate, SimulationResult
 
 
 # =============================================================================
@@ -118,12 +118,18 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """Root endpoint."""
     return {
         "status": "ok",
         "service": "Industrial AI Simulation API",
         "version": "1.0.0"
     }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker/Kubernetes."""
+    return {"status": "healthy"}
 
 
 @app.post("/generate", response_model=GenerateResponse)
@@ -150,7 +156,7 @@ async def generate_model(request: GenerateRequest, use_v7: bool = False):
             # Use Multi-Agent System V7
             print(f"\n🚀 API: Starting V7 pipeline for: {request.description[:50]}...", flush=True)
             sys.stdout.flush()
-            from orchestrator import build_system_model
+            from .orchestrator import build_system_model
             model = build_system_model(request.description, llm_config=config)
             generation_mode = "v7"
             print(f"✅ API: V7 pipeline completed successfully", flush=True)
@@ -431,7 +437,7 @@ async def ai_edit_analyze(request: AIEditRequest):
     - Agent 2: Relationship Analyst - determines influences/connections
     """
     import json
-    from llm_client import LLMClient
+    from .llm_client import LLMClient
     
     try:
         config = get_llm_config()
@@ -694,7 +700,7 @@ async def ai_edit_entity(request: AIEditRequest):
     Analyze an AI edit request for an entire entity.
     """
     import json
-    from llm_client import LLMClient
+    from .llm_client import LLMClient
     
     try:
         config = get_llm_config()
@@ -860,7 +866,7 @@ async def chat_with_model(request: ChatRequest):
     """
     import json
     import copy
-    from llm_client import LLMClient
+    from .llm_client import LLMClient
     
     try:
         config = get_llm_config()
@@ -1146,7 +1152,7 @@ async def ai_explain(request: ExplainRequest):
     Supports 4 perspectives: executive, levers, analyst, technical.
     """
     import json
-    from llm_client import LLMClient
+    from .llm_client import LLMClient
     
     try:
         config = get_llm_config()

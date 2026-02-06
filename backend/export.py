@@ -8,7 +8,7 @@ import json
 import csv
 from pathlib import Path
 from typing import Optional, List
-from simulation import SimulationResult
+from .simulation import SimulationResult
 
 
 def export_to_json(

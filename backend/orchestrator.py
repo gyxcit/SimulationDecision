@@ -10,19 +10,19 @@ import logging
 from typing import Optional
 from dataclasses import dataclass
 
-from llm_client import LLMClient, LLMConfig
-from models import SystemModel
+from .llm_client import LLMClient, LLMConfig
+from .models import SystemModel
 
-from agents.agent1_analyzer import AnalyzerAgent
-from agents.agent2_explorer import EntityExplorerAgent
-from agents.agent3_extremes import ExtremeGeneratorAgent
-from agents.agent4_impact import ImpactAnalystAgent
-from agents.agent5_refiner import RefinerAgent
-from agents.agent6_generator import SystemGeneratorAgent
-from agents.agent7_critic import TechnicalCriticAgent
-from agents.agent8_reviewer import ImpactReviewerAgent
+from .agents.agent1_analyzer import AnalyzerAgent
+from .agents.agent2_explorer import EntityExplorerAgent
+from .agents.agent3_extremes import ExtremeGeneratorAgent
+from .agents.agent4_impact import ImpactAnalystAgent
+from .agents.agent5_refiner import RefinerAgent
+from .agents.agent6_generator import SystemGeneratorAgent
+from .agents.agent7_critic import TechnicalCriticAgent
+from .agents.agent8_reviewer import ImpactReviewerAgent
 
-from agents.schemas import (
+from .agents.schemas import (
     AnalysisOutput,
     EntityMapOutput,
     ScenarioOutput,

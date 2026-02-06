@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Callable, Any
 from copy import deepcopy
 
-from models import SystemModel, ComponentModel, InfluenceModel
+from .models import SystemModel, ComponentModel, InfluenceModel
 
 
 # =============================================================================

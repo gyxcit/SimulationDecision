@@ -20,9 +20,10 @@ if __name__ == "__main__":
     sys.stdout.flush()
     
     uvicorn.run(
-        "api:app",
+        "backend.api:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
+        reload_dirs=["backend"],
         log_level="info"
     )

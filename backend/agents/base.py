@@ -16,7 +16,7 @@ from typing import TypeVar, Generic, Optional, Type
 
 from pydantic import BaseModel, ValidationError
 
-from llm_client import LLMClient, LLMConfig
+from ..llm_client import LLMClient, LLMConfig
 
 logger = logging.getLogger(__name__)
 

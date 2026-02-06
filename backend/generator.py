@@ -12,8 +12,8 @@ from typing import Optional
 
 from pydantic import ValidationError
 
-from models import SystemModel
-from llm_client import LLMClient, LLMConfig
+from .models import SystemModel
+from .llm_client import LLMClient, LLMConfig
 
 logger = logging.getLogger(__name__)
 

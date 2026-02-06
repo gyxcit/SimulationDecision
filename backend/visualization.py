@@ -6,7 +6,7 @@ Provides matplotlib-based plotting for simulation analysis.
 
 import matplotlib.pyplot as plt
 from typing import List, Optional, Dict, Any
-from simulation import SimulationResult
+from .simulation import SimulationResult
 
 
 def plot_simulation(
