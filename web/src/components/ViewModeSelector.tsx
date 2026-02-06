@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
 import { VIEW_MODE_CONFIGS } from '../lib/viewModes';
 import type { ViewMode } from '../lib/viewModes';
-import { 
-    Briefcase, 
-    Code, 
-    TrendingUp, 
-    DollarSign, 
+import {
+    Briefcase,
+    Code,
+    Sliders,
+    Search,
     ChevronDown,
     Check,
     Eye
@@ -16,16 +16,16 @@ import { cn } from '../lib/utils';
 
 const VIEW_MODE_ICONS: Record<ViewMode, React.ReactNode> = {
     executive: <Briefcase className="w-4 h-4" />,
-    technical: <Code className="w-4 h-4" />,
-    sales: <TrendingUp className="w-4 h-4" />,
-    investor: <DollarSign className="w-4 h-4" />
+    levers: <Sliders className="w-4 h-4" />,
+    analyst: <Search className="w-4 h-4" />,
+    technical: <Code className="w-4 h-4" />
 };
 
 const VIEW_MODE_COLORS: Record<ViewMode, string> = {
     executive: 'text-blue-500',
-    technical: 'text-cyan-500',
-    sales: 'text-green-500',
-    investor: 'text-amber-500'
+    levers: 'text-green-500',
+    analyst: 'text-amber-500',
+    technical: 'text-cyan-500'
 };
 
 export const ViewModeSelector: React.FC = () => {
@@ -75,13 +75,13 @@ export const ViewModeSelector: React.FC = () => {
             {isOpen && createPortal(
                 <>
                     {/* Backdrop */}
-                    <div 
-                        className="fixed inset-0 z-[9998]" 
-                        onClick={() => setIsOpen(false)} 
+                    <div
+                        className="fixed inset-0 z-[9998]"
+                        onClick={() => setIsOpen(false)}
                     />
-                    
+
                     {/* Dropdown Menu */}
-                    <div 
+                    <div
                         className="fixed z-[9999] w-80 bg-popover border rounded-xl shadow-xl overflow-hidden"
                         style={{
                             top: buttonRect ? buttonRect.bottom + 8 : 0,
@@ -97,20 +97,20 @@ export const ViewModeSelector: React.FC = () => {
                                 Adapt graphs and values for your audience
                             </p>
                         </div>
-                        
+
                         <div className="p-2">
                             {(Object.keys(VIEW_MODE_CONFIGS) as ViewMode[]).map((mode) => {
                                 const config = VIEW_MODE_CONFIGS[mode];
                                 const isSelected = mode === viewMode;
-                                
+
                                 return (
                                     <button
                                         key={mode}
                                         onClick={() => handleSelect(mode)}
                                         className={cn(
                                             "w-full flex items-start gap-3 p-3 rounded-lg text-left transition-all",
-                                            isSelected 
-                                                ? "bg-primary/10 border border-primary/30" 
+                                            isSelected
+                                                ? "bg-primary/10 border border-primary/30"
                                                 : "hover:bg-accent border border-transparent"
                                         )}
                                     >
@@ -122,7 +122,7 @@ export const ViewModeSelector: React.FC = () => {
                                                 {VIEW_MODE_ICONS[mode]}
                                             </span>
                                         </div>
-                                        
+
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <span className={cn(
@@ -131,6 +131,9 @@ export const ViewModeSelector: React.FC = () => {
                                                 )}>
                                                     {config.label}
                                                 </span>
+                                                <span className="text-xs px-1.5 py-0.5 bg-muted rounded-full text-muted-foreground">
+                                                    L{config.level}
+                                                </span>
                                                 {isSelected && (
                                                     <Check className="w-4 h-4 text-primary" />
                                                 )}
@@ -138,7 +141,7 @@ export const ViewModeSelector: React.FC = () => {
                                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                                                 {config.description}
                                             </p>
-                                            
+
                                             {/* Mode features */}
                                             <div className="flex gap-2 mt-2 flex-wrap">
                                                 {config.showTrendArrows && (
@@ -165,7 +168,7 @@ export const ViewModeSelector: React.FC = () => {
                                 );
                             })}
                         </div>
-                        
+
                         <div className="p-3 border-t bg-muted/20">
                             <p className="text-[10px] text-muted-foreground text-center">
                                 This affects all graphs, values, and labels in the system

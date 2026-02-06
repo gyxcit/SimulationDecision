@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { SystemModel, SimulationResult, Influence } from '../types';
 import type { ViewMode } from '../lib/viewModes';
+import type { ExplainableResult } from '../types/explainability';
+import { analyzeSimulation } from '../lib/explainabilityEngine';
 import axios from 'axios';
 
 // Stored simulation for comparison
@@ -30,6 +32,11 @@ interface AppState {
     showEntityBoxes: boolean; // Toggle entity boxes visibility on canvas
     viewMode: ViewMode; // View mode for different audiences
 
+    // Explainability state
+    explainableResult: ExplainableResult | null;
+    crossFilterVariable: string | null; // For cross-filtering between charts
+    highlightedPath: string[] | null; // For path highlighting in causal graph
+
     // Actions
     setModel: (model: SystemModel) => void;
     generateModel: (description: string) => Promise<void>;
@@ -52,6 +59,11 @@ interface AppState {
     storeSimulation: (name?: string) => void;
     removeStoredSimulation: (id: string) => void;
     renameStoredSimulation: (id: string, name: string) => void;
+
+    // Explainability actions
+    computeExplainability: () => void;
+    setCrossFilter: (variable: string | null) => void;
+    setHighlightedPath: (path: string[] | null) => void;
 }
 
 const API_URL = 'http://localhost:8000';
@@ -145,6 +157,11 @@ export const useStore = create<AppState>((set, get) => ({
     showEntityBoxes: true, // Show entity boxes by default
     viewMode: 'executive' as ViewMode, // Default view mode for business users
 
+    // Explainability initial state
+    explainableResult: null,
+    crossFilterVariable: null,
+    highlightedPath: null,
+
     setModel: (model) => {
         set({ model });
         saveModelToStorage(model);
@@ -195,7 +212,7 @@ export const useStore = create<AppState>((set, get) => ({
                 };
                 set({ simulationResult: result });
                 saveSimulationResultToStorage(result); // Persist to localStorage
-                
+
                 // Auto-store the simulation
                 const { storedSimulations } = get();
                 const variables: string[] = [];
@@ -204,7 +221,7 @@ export const useStore = create<AppState>((set, get) => ({
                         variables.push(`${entityName}.${compName}`);
                     });
                 });
-                
+
                 const newSim: StoredSimulation = {
                     id: `sim-${Date.now()}`,
                     name: `Simulation ${storedSimulations.length + 1}`,
@@ -212,11 +229,11 @@ export const useStore = create<AppState>((set, get) => ({
                     result: JSON.parse(JSON.stringify(result)),
                     variables
                 };
-                
+
                 const newSimulations = [...storedSimulations, newSim];
                 set({ storedSimulations: newSimulations });
                 saveSimulationsToStorage(newSimulations);
-                
+
                 console.log('Simulation result stored:', get().simulationResult);
             }
         } catch (error) {
@@ -234,7 +251,7 @@ export const useStore = create<AppState>((set, get) => ({
         try {
             const [entityName, componentName] = config.parameter.split('.');
             const stepSize = (config.maxValue - config.minValue) / (config.steps - 1);
-            
+
             // Extract variable names
             const variables: string[] = [];
             Object.entries(model.entities).forEach(([eName, entity]) => {
@@ -247,7 +264,7 @@ export const useStore = create<AppState>((set, get) => ({
 
             for (let i = 0; i < config.steps; i++) {
                 const paramValue = config.minValue + (i * stepSize);
-                
+
                 // Clone model and set parameter
                 const testModel = JSON.parse(JSON.stringify(model));
                 if (testModel.entities[entityName]?.components[componentName]) {
@@ -380,7 +397,7 @@ export const useStore = create<AppState>((set, get) => ({
             if (!state.model) return state;
 
             const newModel = JSON.parse(JSON.stringify(state.model));
-            
+
             // Don't add if entity already exists
             if (newModel.entities[name]) return state;
 
@@ -399,15 +416,15 @@ export const useStore = create<AppState>((set, get) => ({
             if (!state.model) return state;
 
             const newModel = JSON.parse(JSON.stringify(state.model));
-            
+
             // Remove the entity
             if (newModel.entities[name]) {
                 delete newModel.entities[name];
-                
+
                 // Also remove any influences that reference this entity's components
                 Object.values(newModel.entities).forEach((entity: any) => {
                     Object.values(entity.components).forEach((comp: any) => {
-                        comp.influences = comp.influences.filter((inf: any) => 
+                        comp.influences = comp.influences.filter((inf: any) =>
                             !inf.from.startsWith(`${name}.`)
                         );
                     });
@@ -424,10 +441,10 @@ export const useStore = create<AppState>((set, get) => ({
             if (!state.model) return state;
 
             const newModel = JSON.parse(JSON.stringify(state.model));
-            
+
             // Check entity exists
             if (!newModel.entities[entityName]) return state;
-            
+
             // Don't add if component already exists
             if (newModel.entities[entityName].components[componentName]) return state;
 
@@ -449,16 +466,16 @@ export const useStore = create<AppState>((set, get) => ({
             if (!state.model) return state;
 
             const newModel = JSON.parse(JSON.stringify(state.model));
-            
+
             // Remove the component
             if (newModel.entities[entityName]?.components[componentName]) {
                 delete newModel.entities[entityName].components[componentName];
-                
+
                 // Also remove any influences that reference this component
                 const componentPath = `${entityName}.${componentName}`;
                 Object.values(newModel.entities).forEach((entity: any) => {
                     Object.values(entity.components).forEach((comp: any) => {
-                        comp.influences = comp.influences.filter((inf: any) => 
+                        comp.influences = comp.influences.filter((inf: any) =>
                             inf.from !== componentPath
                         );
                     });
@@ -524,10 +541,27 @@ export const useStore = create<AppState>((set, get) => ({
 
     renameStoredSimulation: (id: string, name: string) => {
         const { storedSimulations } = get();
-        const newSimulations = storedSimulations.map(s => 
+        const newSimulations = storedSimulations.map(s =>
             s.id === id ? { ...s, name } : s
         );
         set({ storedSimulations: newSimulations });
         saveSimulationsToStorage(newSimulations);
+    },
+
+    // Explainability actions
+    computeExplainability: () => {
+        const { model, simulationResult } = get();
+        if (!model || !simulationResult) return;
+
+        const result = analyzeSimulation(model, simulationResult);
+        set({ explainableResult: result });
+    },
+
+    setCrossFilter: (variable: string | null) => {
+        set({ crossFilterVariable: variable });
+    },
+
+    setHighlightedPath: (path: string[] | null) => {
+        set({ highlightedPath: path });
     },
 }));

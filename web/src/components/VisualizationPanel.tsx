@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
-import { 
-    LineChart, 
-    BarChart3, 
-    TrendingUp, 
-    Activity, 
+import {
+    LineChart,
+    BarChart3,
+    TrendingUp,
+    Activity,
     Layers,
     ArrowUpDown,
     Maximize2,
@@ -41,7 +41,7 @@ const CHART_TYPES: ChartConfig[] = [
 ];
 
 const COLORS = [
-    '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', 
+    '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
     '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'
 ];
 
@@ -50,8 +50,8 @@ export const VisualizationPanel: React.FC = () => {
     const [selectedCharts, setSelectedCharts] = useState<ChartType[]>(['timeSeries']);
 
     const toggleChart = (chartType: ChartType) => {
-        setSelectedCharts(prev => 
-            prev.includes(chartType) 
+        setSelectedCharts(prev =>
+            prev.includes(chartType)
                 ? prev.filter(c => c !== chartType)
                 : [...prev, chartType]
         );
@@ -73,8 +73,8 @@ export const VisualizationPanel: React.FC = () => {
                         onClick={() => toggleChart(chart.id)}
                         className={cn(
                             "w-full flex items-center gap-3 p-2 rounded-md text-left transition-colors",
-                            selectedCharts.includes(chart.id) 
-                                ? "bg-primary/10 text-primary border border-primary/20" 
+                            selectedCharts.includes(chart.id)
+                                ? "bg-primary/10 text-primary border border-primary/20"
                                 : "hover:bg-accent text-muted-foreground"
                         )}
                     >
@@ -110,7 +110,7 @@ export const VisualizationView: React.FC = () => {
     const [fullscreenChart, setFullscreenChart] = useState<ChartType | null>(null);
     const [activeChartForConfig, setActiveChartForConfig] = useState<ChartType | null>('timeSeries');
     const [showDeepAnalysis, setShowDeepAnalysis] = useState(false);
-    
+
     // Per-chart variable selection - use Set for better tracking
     const [chartVariables, setChartVariables] = useState<Record<ChartType, Set<string>>>({
         timeSeries: new Set(),
@@ -183,8 +183,8 @@ export const VisualizationView: React.FC = () => {
 
     // Toggle simulation selection
     const toggleSimulationSelection = (simId: string) => {
-        setSelectedSimulations(prev => 
-            prev.includes(simId) 
+        setSelectedSimulations(prev =>
+            prev.includes(simId)
                 ? prev.filter(id => id !== simId)
                 : [...prev, simId]
         );
@@ -193,9 +193,9 @@ export const VisualizationView: React.FC = () => {
     // Calculate statistics
     const getStats = (result: SimulationResult, vars: string[]) => {
         if (!result || !result.history.length) return null;
-        
+
         const statistics: Record<string, { min: number; max: number; mean: number; final: number; initial: number }> = {};
-        
+
         vars.forEach(varName => {
             const values = result.history.map(h => h[varName] ?? 0);
             if (values.length === 0) return;
@@ -207,7 +207,7 @@ export const VisualizationView: React.FC = () => {
                 final: values[values.length - 1] ?? 0
             };
         });
-        
+
         return statistics;
     };
 
@@ -218,9 +218,9 @@ export const VisualizationView: React.FC = () => {
     // Calculate rates of change
     const getRates = (result: SimulationResult, vars: string[]) => {
         if (!result || result.history.length < 2) return null;
-        
+
         const rateData: Record<string, number[]> = {};
-        
+
         vars.forEach(varName => {
             rateData[varName] = [];
             for (let i = 1; i < result.history.length; i++) {
@@ -229,7 +229,7 @@ export const VisualizationView: React.FC = () => {
                 rateData[varName].push(dt !== 0 ? dv / dt : 0);
             }
         });
-        
+
         return rateData;
     };
 
@@ -255,7 +255,7 @@ export const VisualizationView: React.FC = () => {
         const height = isFullscreen ? 400 : 250;
         const width = isFullscreen ? 900 : 700;
         const chartVars = getChartVariables(chartType);
-        
+
         if (chartVars.length === 0) {
             return (
                 <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -263,11 +263,11 @@ export const VisualizationView: React.FC = () => {
                 </div>
             );
         }
-        
+
         const padding = { top: 40, right: 20, bottom: 40, left: 60 };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        
+
         switch (chartType) {
             case 'timeSeries': {
                 // Calculate global min/max for all selected variables
@@ -278,20 +278,20 @@ export const VisualizationView: React.FC = () => {
                     globalMin = Math.min(globalMin, ...values);
                     globalMax = Math.max(globalMax, ...values);
                 });
-                
+
                 if (globalMin === globalMax) {
                     globalMax = globalMin + 1;
                 }
                 const range = globalMax - globalMin;
                 globalMin -= range * 0.05;
                 globalMax += range * 0.05;
-                
+
                 return (
                     <div className="w-full overflow-x-auto">
                         <svg width={width} height={height} style={{ minWidth: width }}>
                             {/* Background */}
                             <rect width={width} height={height} fill="transparent" />
-                            
+
                             {/* Grid lines */}
                             {[0, 0.25, 0.5, 0.75, 1].map(t => (
                                 <g key={`grid-${t}`}>
@@ -315,7 +315,7 @@ export const VisualizationView: React.FC = () => {
                                     </text>
                                 </g>
                             ))}
-                            
+
                             {/* Axes */}
                             <line
                                 x1={padding.left}
@@ -333,20 +333,20 @@ export const VisualizationView: React.FC = () => {
                                 stroke="#6b7280"
                                 strokeWidth="1"
                             />
-                            
+
                             {/* Data lines */}
                             {chartVars.map((varName, idx) => {
                                 const values = simulationResult.history.map(h => h[varName] ?? 0);
                                 const n = values.length;
-                                
+
                                 if (n < 2) return null;
-                                
+
                                 const points = values.map((v, i) => {
                                     const x = padding.left + (i / (n - 1)) * chartWidth;
                                     const y = padding.top + chartHeight - ((v - globalMin) / (globalMax - globalMin)) * chartHeight;
                                     return `${x},${y}`;
                                 }).join(' ');
-                                
+
                                 return (
                                     <polyline
                                         key={varName}
@@ -359,17 +359,17 @@ export const VisualizationView: React.FC = () => {
                                     />
                                 );
                             })}
-                            
+
                             {/* Legend */}
                             <g transform={`translate(${padding.left + 10}, ${padding.top + 5})`}>
                                 {chartVars.map((varName, idx) => (
                                     <g key={varName} transform={`translate(${(idx % 3) * 150}, ${Math.floor(idx / 3) * 18})`}>
-                                        <rect width="12" height="12" fill={COLORS[idx % COLORS.length]} rx="2"/>
+                                        <rect width="12" height="12" fill={COLORS[idx % COLORS.length]} rx="2" />
                                         <text x="16" y="10" fontSize="11" fill="#d1d5db">{varName}</text>
                                     </g>
                                 ))}
                             </g>
-                            
+
                             {/* X-axis label */}
                             <text
                                 x={padding.left + chartWidth / 2}
@@ -389,25 +389,25 @@ export const VisualizationView: React.FC = () => {
                 if (chartVars.length < 2) {
                     return <div className="h-64 flex items-center justify-center text-muted-foreground">Sélectionnez au moins 2 variables</div>;
                 }
-                
+
                 const var1 = chartVars[0];
                 const var2 = chartVars[1];
                 const vals1 = simulationResult.history.map(h => h[var1] ?? 0);
                 const vals2 = simulationResult.history.map(h => h[var2] ?? 0);
-                
+
                 const min1 = Math.min(...vals1);
                 const max1 = Math.max(...vals1) || 1;
                 const min2 = Math.min(...vals2);
                 const max2 = Math.max(...vals2) || 1;
                 const range1 = (max1 - min1) || 1;
                 const range2 = (max2 - min2) || 1;
-                
+
                 const points = vals1.map((v1, i) => {
                     const x = padding.left + ((v1 - min1) / range1) * chartWidth;
                     const y = padding.top + chartHeight - ((vals2[i] - min2) / range2) * chartHeight;
                     return `${x},${y}`;
                 }).join(' ');
-                
+
                 return (
                     <div className="w-full overflow-x-auto">
                         <svg width={width} height={height} style={{ minWidth: width }}>
@@ -421,7 +421,7 @@ export const VisualizationView: React.FC = () => {
                                 stroke="#374151"
                                 strokeOpacity="0.3"
                             />
-                            
+
                             {/* Trajectory */}
                             <polyline
                                 points={points}
@@ -430,9 +430,9 @@ export const VisualizationView: React.FC = () => {
                                 strokeWidth="2"
                                 strokeLinejoin="round"
                             />
-                            
+
                             {/* Start point */}
-                            <circle 
+                            <circle
                                 cx={padding.left + ((vals1[0] - min1) / range1) * chartWidth}
                                 cy={padding.top + chartHeight - ((vals2[0] - min2) / range2) * chartHeight}
                                 r="8"
@@ -446,23 +446,23 @@ export const VisualizationView: React.FC = () => {
                             >
                                 Début
                             </text>
-                            
+
                             {/* End point */}
-                            <circle 
-                                cx={padding.left + ((vals1[vals1.length-1] - min1) / range1) * chartWidth}
-                                cy={padding.top + chartHeight - ((vals2[vals2.length-1] - min2) / range2) * chartHeight}
+                            <circle
+                                cx={padding.left + ((vals1[vals1.length - 1] - min1) / range1) * chartWidth}
+                                cy={padding.top + chartHeight - ((vals2[vals2.length - 1] - min2) / range2) * chartHeight}
                                 r="8"
                                 fill="#ef4444"
                             />
                             <text
-                                x={padding.left + ((vals1[vals1.length-1] - min1) / range1) * chartWidth + 12}
-                                y={padding.top + chartHeight - ((vals2[vals2.length-1] - min2) / range2) * chartHeight + 4}
+                                x={padding.left + ((vals1[vals1.length - 1] - min1) / range1) * chartWidth + 12}
+                                y={padding.top + chartHeight - ((vals2[vals2.length - 1] - min2) / range2) * chartHeight + 4}
                                 fontSize="10"
                                 fill="#ef4444"
                             >
                                 Fin
                             </text>
-                            
+
                             {/* Labels */}
                             <text
                                 x={padding.left + chartWidth / 2}
@@ -491,10 +491,10 @@ export const VisualizationView: React.FC = () => {
             case 'distribution': {
                 const chartStats = stats;
                 if (!chartStats) return null;
-                
+
                 const maxVal = Math.max(...chartVars.map(v => chartStats[v]?.max ?? 0), 1);
                 const barWidth = Math.min(60, (chartWidth - 20) / chartVars.length - 10);
-                
+
                 return (
                     <div className="w-full overflow-x-auto">
                         <svg width={width} height={height} style={{ minWidth: width }}>
@@ -507,7 +507,7 @@ export const VisualizationView: React.FC = () => {
                                 stroke="#6b7280"
                                 strokeWidth="1"
                             />
-                            
+
                             {/* Y-axis labels */}
                             {[0, 0.5, 1].map(t => (
                                 <text
@@ -521,21 +521,21 @@ export const VisualizationView: React.FC = () => {
                                     {(maxVal * t).toFixed(1)}
                                 </text>
                             ))}
-                            
+
                             {chartVars.map((varName, idx) => {
                                 const stat = chartStats[varName];
                                 if (!stat) return null;
-                                
+
                                 const x = padding.left + 20 + idx * (barWidth + 10);
                                 const barHeight = (stat.max / maxVal) * chartHeight;
                                 const minHeight = (stat.min / maxVal) * chartHeight;
                                 const meanY = padding.top + chartHeight - (stat.mean / maxVal) * chartHeight;
-                                
+
                                 return (
                                     <g key={varName}>
                                         {/* Min-Max range bar */}
-                                        <rect 
-                                            x={x} 
+                                        <rect
+                                            x={x}
                                             y={padding.top + chartHeight - barHeight}
                                             width={barWidth}
                                             height={barHeight - minHeight}
@@ -544,8 +544,8 @@ export const VisualizationView: React.FC = () => {
                                             rx="4"
                                         />
                                         {/* Mean line */}
-                                        <line 
-                                            x1={x} 
+                                        <line
+                                            x1={x}
                                             x2={x + barWidth}
                                             y1={meanY}
                                             y2={meanY}
@@ -553,11 +553,11 @@ export const VisualizationView: React.FC = () => {
                                             strokeWidth="3"
                                         />
                                         {/* Label */}
-                                        <text 
-                                            x={x + barWidth / 2} 
+                                        <text
+                                            x={x + barWidth / 2}
                                             y={height - 8}
-                                            textAnchor="middle" 
-                                            fontSize="9" 
+                                            textAnchor="middle"
+                                            fontSize="9"
                                             fill="#9ca3af"
                                         >
                                             {varName.split('.')[1] || varName}
@@ -573,14 +573,14 @@ export const VisualizationView: React.FC = () => {
             case 'comparison': {
                 const chartStats = stats;
                 if (!chartStats) return null;
-                
+
                 const maxVal = Math.max(
                     ...chartVars.flatMap(v => [chartStats[v]?.initial ?? 0, chartStats[v]?.final ?? 0]),
                     1
                 );
                 const groupWidth = Math.min(100, (chartWidth - 40) / chartVars.length);
                 const barWidth = groupWidth / 3;
-                
+
                 return (
                     <div className="w-full overflow-x-auto">
                         <svg width={width} height={height} style={{ minWidth: width }}>
@@ -593,20 +593,20 @@ export const VisualizationView: React.FC = () => {
                                 stroke="#6b7280"
                                 strokeWidth="1"
                             />
-                            
+
                             {chartVars.map((varName, idx) => {
                                 const stat = chartStats[varName];
                                 if (!stat) return null;
-                                
+
                                 const x = padding.left + 20 + idx * groupWidth;
                                 const initialHeight = (stat.initial / maxVal) * chartHeight;
                                 const finalHeight = (stat.final / maxVal) * chartHeight;
-                                
+
                                 return (
                                     <g key={varName}>
                                         {/* Initial bar */}
-                                        <rect 
-                                            x={x} 
+                                        <rect
+                                            x={x}
                                             y={padding.top + chartHeight - initialHeight}
                                             width={barWidth - 2}
                                             height={initialHeight}
@@ -614,8 +614,8 @@ export const VisualizationView: React.FC = () => {
                                             rx="3"
                                         />
                                         {/* Final bar */}
-                                        <rect 
-                                            x={x + barWidth} 
+                                        <rect
+                                            x={x + barWidth}
                                             y={padding.top + chartHeight - finalHeight}
                                             width={barWidth - 2}
                                             height={finalHeight}
@@ -623,11 +623,11 @@ export const VisualizationView: React.FC = () => {
                                             rx="3"
                                         />
                                         {/* Label */}
-                                        <text 
-                                            x={x + barWidth} 
+                                        <text
+                                            x={x + barWidth}
                                             y={height - 8}
-                                            textAnchor="middle" 
-                                            fontSize="9" 
+                                            textAnchor="middle"
+                                            fontSize="9"
                                             fill="#9ca3af"
                                         >
                                             {varName.split('.')[1] || varName}
@@ -635,12 +635,12 @@ export const VisualizationView: React.FC = () => {
                                     </g>
                                 );
                             })}
-                            
+
                             {/* Legend */}
                             <g transform={`translate(${width - 100}, ${padding.top})`}>
-                                <rect width="12" height="12" fill="#3b82f6" rx="2"/>
+                                <rect width="12" height="12" fill="#3b82f6" rx="2" />
                                 <text x="16" y="10" fontSize="10" fill="#d1d5db">Initial</text>
-                                <rect y="18" width="12" height="12" fill="#22c55e" rx="2"/>
+                                <rect y="18" width="12" height="12" fill="#22c55e" rx="2" />
                                 <text x="16" y="28" fontSize="10" fill="#d1d5db">Final</text>
                             </g>
                         </svg>
@@ -651,14 +651,14 @@ export const VisualizationView: React.FC = () => {
             case 'rates': {
                 const chartRates = rates;
                 if (!chartRates) return <div className="h-64 flex items-center justify-center text-muted-foreground">Données insuffisantes</div>;
-                
+
                 let maxRate = 0;
                 chartVars.forEach(varName => {
                     const rateValues = chartRates[varName] || [];
                     maxRate = Math.max(maxRate, ...rateValues.map(Math.abs));
                 });
                 maxRate = maxRate || 1;
-                
+
                 return (
                     <div className="w-full overflow-x-auto">
                         <svg width={width} height={height} style={{ minWidth: width }}>
@@ -672,7 +672,7 @@ export const VisualizationView: React.FC = () => {
                                 strokeWidth="1"
                                 strokeDasharray="4"
                             />
-                            
+
                             {/* Y-axis */}
                             <line
                                 x1={padding.left}
@@ -682,19 +682,19 @@ export const VisualizationView: React.FC = () => {
                                 stroke="#6b7280"
                                 strokeWidth="1"
                             />
-                            
+
                             {chartVars.map((varName, idx) => {
                                 const rateValues = chartRates[varName] || [];
                                 const n = rateValues.length;
-                                
+
                                 if (n < 2) return null;
-                                
+
                                 const points = rateValues.map((v, i) => {
                                     const x = padding.left + (i / (n - 1)) * chartWidth;
                                     const y = padding.top + chartHeight / 2 - (v / maxRate) * (chartHeight / 2);
                                     return `${x},${y}`;
                                 }).join(' ');
-                                
+
                                 return (
                                     <polyline
                                         key={varName}
@@ -706,12 +706,12 @@ export const VisualizationView: React.FC = () => {
                                     />
                                 );
                             })}
-                            
+
                             {/* Legend */}
                             <g transform={`translate(${padding.left + 10}, ${padding.top + 5})`}>
                                 {chartVars.map((varName, idx) => (
                                     <g key={varName} transform={`translate(${(idx % 3) * 150}, ${Math.floor(idx / 3) * 18})`}>
-                                        <rect width="12" height="12" fill={COLORS[idx % COLORS.length]} rx="2"/>
+                                        <rect width="12" height="12" fill={COLORS[idx % COLORS.length]} rx="2" />
                                         <text x="16" y="10" fontSize="11" fill="#d1d5db">d({varName})/dt</text>
                                     </g>
                                 ))}
@@ -724,17 +724,17 @@ export const VisualizationView: React.FC = () => {
             case 'correlation': {
                 const cellSize = Math.min(50, (Math.min(chartWidth, chartHeight) - 60) / chartVars.length);
                 const matrixSize = cellSize * chartVars.length;
-                
+
                 return (
                     <div className="w-full overflow-x-auto flex justify-center">
                         <svg width={matrixSize + 100} height={matrixSize + 80}>
-                            {chartVars.map((var1, i) => 
+                            {chartVars.map((var1, i) =>
                                 chartVars.map((var2, j) => {
                                     const vals1 = simulationResult.history.map(h => h[var1] ?? 0);
                                     const vals2 = simulationResult.history.map(h => h[var2] ?? 0);
                                     const mean1 = vals1.reduce((a, b) => a + b, 0) / vals1.length;
                                     const mean2 = vals2.reduce((a, b) => a + b, 0) / vals2.length;
-                                    
+
                                     let num = 0, den1 = 0, den2 = 0;
                                     for (let k = 0; k < vals1.length; k++) {
                                         const d1 = vals1[k] - mean1;
@@ -744,28 +744,28 @@ export const VisualizationView: React.FC = () => {
                                         den2 += d2 * d2;
                                     }
                                     const corr = den1 && den2 ? num / Math.sqrt(den1 * den2) : 0;
-                                    
+
                                     const x = 80 + j * cellSize;
                                     const y = 40 + i * cellSize;
-                                    
-                                    const color = corr > 0 
-                                        ? `rgba(34, 197, 94, ${Math.abs(corr)})` 
+
+                                    const color = corr > 0
+                                        ? `rgba(34, 197, 94, ${Math.abs(corr)})`
                                         : `rgba(239, 68, 68, ${Math.abs(corr)})`;
-                                    
+
                                     return (
                                         <g key={`${var1}-${var2}`}>
-                                            <rect 
-                                                x={x} 
-                                                y={y} 
-                                                width={cellSize - 2} 
+                                            <rect
+                                                x={x}
+                                                y={y}
+                                                width={cellSize - 2}
                                                 height={cellSize - 2}
                                                 fill={color}
                                                 stroke="#374151"
                                                 strokeOpacity="0.3"
                                                 rx="2"
                                             />
-                                            <text 
-                                                x={x + cellSize / 2 - 1} 
+                                            <text
+                                                x={x + cellSize / 2 - 1}
                                                 y={y + cellSize / 2 + 4}
                                                 textAnchor="middle"
                                                 fontSize="10"
@@ -777,12 +777,12 @@ export const VisualizationView: React.FC = () => {
                                     );
                                 })
                             )}
-                            
+
                             {/* Row labels */}
                             {chartVars.map((varName, i) => (
-                                <text 
+                                <text
                                     key={`row-${varName}`}
-                                    x="75" 
+                                    x="75"
                                     y={40 + i * cellSize + cellSize / 2 + 4}
                                     textAnchor="end"
                                     fontSize="9"
@@ -791,10 +791,10 @@ export const VisualizationView: React.FC = () => {
                                     {varName.split('.')[1] || varName}
                                 </text>
                             ))}
-                            
+
                             {/* Column labels */}
                             {chartVars.map((varName, j) => (
-                                <text 
+                                <text
                                     key={`col-${varName}`}
                                     x={80 + j * cellSize + cellSize / 2}
                                     y="32"
@@ -819,7 +819,7 @@ export const VisualizationView: React.FC = () => {
                         </div>
                     );
                 }
-                
+
                 const selectedSims = storedSimulations.filter(s => selectedSimulations.includes(s.id));
                 if (selectedSims.length === 0) {
                     return (
@@ -828,11 +828,11 @@ export const VisualizationView: React.FC = () => {
                         </div>
                     );
                 }
-                
+
                 // Compare first variable across simulations
                 const compareVar = chartVars[0];
                 if (!compareVar) return null;
-                
+
                 let globalMin = Infinity;
                 let globalMax = -Infinity;
                 selectedSims.forEach(sim => {
@@ -840,12 +840,12 @@ export const VisualizationView: React.FC = () => {
                     globalMin = Math.min(globalMin, ...values);
                     globalMax = Math.max(globalMax, ...values);
                 });
-                
+
                 if (globalMin === globalMax) globalMax = globalMin + 1;
                 const range = globalMax - globalMin;
                 globalMin -= range * 0.05;
                 globalMax += range * 0.05;
-                
+
                 return (
                     <div className="w-full overflow-x-auto">
                         <svg width={width} height={height} style={{ minWidth: width }}>
@@ -862,7 +862,7 @@ export const VisualizationView: React.FC = () => {
                                     strokeDasharray="4"
                                 />
                             ))}
-                            
+
                             {/* Axes */}
                             <line
                                 x1={padding.left}
@@ -872,20 +872,20 @@ export const VisualizationView: React.FC = () => {
                                 stroke="#6b7280"
                                 strokeWidth="1"
                             />
-                            
+
                             {/* Lines for each simulation */}
                             {selectedSims.map((sim, idx) => {
                                 const values = sim.result.history.map(h => h[compareVar] ?? 0);
                                 const n = values.length;
-                                
+
                                 if (n < 2) return null;
-                                
+
                                 const points = values.map((v, i) => {
                                     const x = padding.left + (i / (n - 1)) * chartWidth;
                                     const y = padding.top + chartHeight - ((v - globalMin) / (globalMax - globalMin)) * chartHeight;
                                     return `${x},${y}`;
                                 }).join(' ');
-                                
+
                                 return (
                                     <polyline
                                         key={sim.id}
@@ -897,17 +897,17 @@ export const VisualizationView: React.FC = () => {
                                     />
                                 );
                             })}
-                            
+
                             {/* Legend */}
                             <g transform={`translate(${padding.left + 10}, ${padding.top + 5})`}>
                                 {selectedSims.map((sim, idx) => (
                                     <g key={sim.id} transform={`translate(${(idx % 3) * 120}, ${Math.floor(idx / 3) * 18})`}>
-                                        <rect width="12" height="12" fill={COLORS[idx % COLORS.length]} rx="2"/>
+                                        <rect width="12" height="12" fill={COLORS[idx % COLORS.length]} rx="2" />
                                         <text x="16" y="10" fontSize="11" fill="#d1d5db">{sim.name}</text>
                                     </g>
                                 ))}
                             </g>
-                            
+
                             {/* Title */}
                             <text
                                 x={padding.left + chartWidth / 2}
@@ -930,17 +930,17 @@ export const VisualizationView: React.FC = () => {
 
     const toggleChart = (chartType: ChartType) => {
         setSelectedCharts(prev => {
-            const newCharts = prev.includes(chartType) 
+            const newCharts = prev.includes(chartType)
                 ? prev.filter(c => c !== chartType)
                 : [...prev, chartType];
-            
+
             // Set active config to the newly added chart
             if (!prev.includes(chartType)) {
                 setActiveChartForConfig(chartType);
             } else if (activeChartForConfig === chartType) {
                 setActiveChartForConfig(newCharts[0] || null);
             }
-            
+
             return newCharts;
         });
     };
@@ -955,7 +955,7 @@ export const VisualizationView: React.FC = () => {
                         Sélectionnez les variables par graphique
                     </p>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-2">
                     {/* Chart selector */}
                     <div className="mb-4">
@@ -979,15 +979,15 @@ export const VisualizationView: React.FC = () => {
                                             : "hover:bg-accent text-muted-foreground"
                                     )}
                                 >
-                                    <div 
+                                    <div
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             toggleChart(chart.id);
                                         }}
                                         className={cn(
                                             "w-5 h-5 rounded border flex items-center justify-center cursor-pointer",
-                                            selectedCharts.includes(chart.id) 
-                                                ? "bg-primary border-primary" 
+                                            selectedCharts.includes(chart.id)
+                                                ? "bg-primary border-primary"
                                                 : "border-muted-foreground"
                                         )}
                                     >
@@ -996,12 +996,12 @@ export const VisualizationView: React.FC = () => {
                                     {chart.icon}
                                     <span className="flex-1 truncate">{chart.name}</span>
                                     {selectedCharts.includes(chart.id) && (
-                                        activeChartForConfig === chart.id 
+                                        activeChartForConfig === chart.id
                                             ? <ChevronDown className="w-4 h-4" />
                                             : <ChevronRight className="w-4 h-4" />
                                     )}
                                 </button>
-                                
+
                                 {/* Variable selection for this chart */}
                                 {activeChartForConfig === chart.id && selectedCharts.includes(chart.id) && (
                                     <div className="ml-4 mt-1 p-2 bg-background rounded-md border">
@@ -1023,7 +1023,7 @@ export const VisualizationView: React.FC = () => {
                                             </div>
                                         </div>
                                         {variables.map((varName, idx) => {
-                                            const isSelected = chartVariables[chart.id].size === 0 
+                                            const isSelected = chartVariables[chart.id].size === 0
                                                 || chartVariables[chart.id].has(varName);
                                             return (
                                                 <button
@@ -1034,7 +1034,7 @@ export const VisualizationView: React.FC = () => {
                                                         isSelected ? "text-foreground" : "text-muted-foreground"
                                                     )}
                                                 >
-                                                    <div 
+                                                    <div
                                                         className="w-3 h-3 rounded-sm"
                                                         style={{ backgroundColor: isSelected ? COLORS[idx % COLORS.length] : '#374151' }}
                                                     />
@@ -1061,8 +1061,8 @@ export const VisualizationView: React.FC = () => {
                         >
                             <div className={cn(
                                 "w-8 h-8 rounded-lg flex items-center justify-center",
-                                showDeepAnalysis 
-                                    ? "bg-gradient-to-br from-purple-500 to-blue-600" 
+                                showDeepAnalysis
+                                    ? "bg-gradient-to-br from-purple-500 to-blue-600"
                                     : "bg-accent"
                             )}>
                                 <Brain className={cn("w-4 h-4", showDeepAnalysis && "text-white")} />
@@ -1074,21 +1074,21 @@ export const VisualizationView: React.FC = () => {
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                     {viewMode === 'technical' ? 'Analyse approfondie du système' :
-                                     viewMode === 'executive' ? 'Insights stratégiques' :
-                                     viewMode === 'investor' ? 'Analyse des risques' :
-                                     'Opportunités commerciales'}
+                                        viewMode === 'executive' ? 'Insights stratégiques' :
+                                            viewMode === 'analyst' ? 'Analyse causale' :
+                                                'Opportunités des leviers'}
                                 </div>
                             </div>
                             {showDeepAnalysis ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </button>
                     </div>
-                    
+
                     {/* Stored simulations section */}
                     <div className="border-t pt-3 mt-3">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-medium text-muted-foreground">Simulations disponibles</span>
                         </div>
-                        
+
                         {storedSimulations.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-2">
                                 Lancez une simulation depuis le canvas
@@ -1106,7 +1106,7 @@ export const VisualizationView: React.FC = () => {
                                                 : "hover:bg-accent text-muted-foreground"
                                         )}
                                     >
-                                        <div 
+                                        <div
                                             className="w-3 h-3 rounded-full"
                                             style={{ backgroundColor: COLORS[idx % COLORS.length] }}
                                         />
@@ -1156,8 +1156,8 @@ export const VisualizationView: React.FC = () => {
                             <div className={cn(
                                 "grid gap-4",
                                 selectedCharts.length === 1 ? "grid-cols-1" :
-                                selectedCharts.length === 2 ? "grid-cols-1 lg:grid-cols-2" :
-                                "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+                                    selectedCharts.length === 2 ? "grid-cols-1 lg:grid-cols-2" :
+                                        "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
                             )}>
                                 {selectedCharts.map(chartType => {
                                     const chartConfig = CHART_TYPES.find(c => c.id === chartType);
@@ -1169,7 +1169,7 @@ export const VisualizationView: React.FC = () => {
                                                     <h3 className="font-medium">{chartConfig?.name}</h3>
                                                 </div>
                                                 <div className="flex gap-1">
-                                                    <button 
+                                                    <button
                                                         className="p-1 hover:bg-accent rounded transition-colors"
                                                         title="Plein écran"
                                                         onClick={() => setFullscreenChart(chartType)}
@@ -1203,11 +1203,11 @@ export const VisualizationView: React.FC = () => {
 
             {/* Fullscreen Modal */}
             {fullscreenChart && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-8"
                     onClick={() => setFullscreenChart(null)}
                 >
-                    <div 
+                    <div
                         className="bg-card rounded-xl w-full max-w-6xl max-h-[90vh] overflow-auto p-6"
                         onClick={e => e.stopPropagation()}
                     >
@@ -1215,7 +1215,7 @@ export const VisualizationView: React.FC = () => {
                             <h2 className="text-xl font-bold">
                                 {CHART_TYPES.find(c => c.id === fullscreenChart)?.name}
                             </h2>
-                            <button 
+                            <button
                                 onClick={() => setFullscreenChart(null)}
                                 className="p-2 hover:bg-accent rounded-md transition-colors"
                             >

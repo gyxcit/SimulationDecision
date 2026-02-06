@@ -15,7 +15,7 @@ interface EntityMenuProps {
     onViewJSON: () => void;
     onDelete: () => void;
     onClose: () => void;
-    buttonRef: React.RefObject<HTMLButtonElement>;
+    buttonRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 const EntityMenu: React.FC<EntityMenuProps> = ({ onAddComponent, onAIEdit, onViewJSON, onDelete, onClose, buttonRef }) => {
@@ -94,7 +94,7 @@ interface AddComponentModalProps {
     onClose: () => void;
 }
 
-const AddComponentModal: React.FC<AddComponentModalProps> = ({ entityName, onAddManual, onAddAI, onClose }) => {
+const AddComponentModal: React.FC<AddComponentModalProps> = ({ entityName, onAddManual, onAddAI: _onAddAI, onClose }) => {
     const [mode, setMode] = useState<'choose' | 'manual' | 'ai'>('choose');
     const [componentName, setComponentName] = useState('');
     const [componentType, setComponentType] = useState<'state' | 'computed' | 'constant'>('state');
@@ -327,7 +327,7 @@ interface EntityAIProposal {
 }
 
 const EntityAIEditModal: React.FC<EntityAIEditModalProps> = ({ entityName, entity, onClose }) => {
-    const { model, setModel } = useStore();
+    const { model, setModel: _setModel } = useStore();
     const [prompt, setPrompt] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [proposal, setProposal] = useState<EntityAIProposal | null>(null);
@@ -474,9 +474,8 @@ const EntityAIEditModal: React.FC<EntityAIEditModalProps> = ({ entityName, entit
                                 {proposal.otherEntityChanges.map((change, i) => (
                                     <div
                                         key={i}
-                                        className={`p-3 border rounded-md text-sm cursor-pointer transition-colors ${
-                                            approvedOtherChanges.has(i) ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 hover:border-amber-200'
-                                        }`}
+                                        className={`p-3 border rounded-md text-sm cursor-pointer transition-colors ${approvedOtherChanges.has(i) ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 hover:border-amber-200'
+                                            }`}
                                         onClick={() => toggleOtherChange(i)}
                                     >
                                         <div className="flex items-start gap-2">
@@ -756,7 +755,7 @@ export const GroupNode: React.FC<NodeProps> = ({ data, selected }) => {
                         <MoreVertical className="w-4 h-4" />
                     </button>
                 </div>
-                
+
                 {showMenu && (
                     <EntityMenu
                         onAddComponent={handleAddComponent}

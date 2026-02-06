@@ -5,7 +5,7 @@ import {
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
     BarChart, Bar, Cell, Legend, ComposedChart
 } from 'recharts';
-import { 
+import {
     GitBranch, Grid3X3, BarChart2, Target, Activity, Thermometer,
     Info
 } from 'lucide-react';
@@ -36,28 +36,28 @@ const CHART_OPTIONS: ChartOption[] = [
         label: 'Correlation Matrix',
         icon: <Grid3X3 className="w-4 h-4" />,
         description: 'Relationships between all variables',
-        audiences: ['technical', 'investor']
+        audiences: ['technical', 'analyst']
     },
     {
         id: 'waterfall',
         label: 'Waterfall',
         icon: <BarChart2 className="w-4 h-4" />,
         description: 'Breakdown of changes from initial to final state',
-        audiences: ['executive', 'investor', 'sales']
+        audiences: ['executive', 'analyst', 'levers']
     },
     {
         id: 'radar',
         label: 'Radar View',
         icon: <Target className="w-4 h-4" />,
         description: 'Multi-dimensional comparison at a glance',
-        audiences: ['executive', 'sales', 'investor']
+        audiences: ['executive', 'levers', 'analyst']
     },
     {
         id: 'sensitivity',
         label: 'Sensitivity',
         icon: <Activity className="w-4 h-4" />,
         description: 'Which variables have the most impact',
-        audiences: ['technical', 'investor']
+        audiences: ['technical', 'analyst']
     },
     {
         id: 'heatmap',
@@ -118,12 +118,12 @@ export const AdvancedCharts: React.FC = () => {
         if (!simulationResult || allVariables.length === 0) return [];
 
         const correlations: { x: string; y: string; value: number }[] = [];
-        
+
         for (const varX of allVariables) {
             for (const varY of allVariables) {
                 const xValues = simulationResult.history.map(h => h[varX] || 0);
                 const yValues = simulationResult.history.map(h => h[varY] || 0);
-                
+
                 // Calculate Pearson correlation
                 const n = xValues.length;
                 const sumX = xValues.reduce((a, b) => a + b, 0);
@@ -131,11 +131,11 @@ export const AdvancedCharts: React.FC = () => {
                 const sumXY = xValues.reduce((acc, x, i) => acc + x * yValues[i], 0);
                 const sumX2 = xValues.reduce((acc, x) => acc + x * x, 0);
                 const sumY2 = yValues.reduce((acc, y) => acc + y * y, 0);
-                
+
                 const num = n * sumXY - sumX * sumY;
                 const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
                 const correlation = den === 0 ? 0 : num / den;
-                
+
                 correlations.push({
                     x: getDisplayLabel(varX, viewMode as ViewMode),
                     y: getDisplayLabel(varY, viewMode as ViewMode),
@@ -143,20 +143,20 @@ export const AdvancedCharts: React.FC = () => {
                 });
             }
         }
-        
+
         return correlations;
     }, [simulationResult, allVariables, viewMode]);
 
     // Calculate waterfall data
     const waterfallData = useMemo(() => {
         if (!simulationResult) return [];
-        
+
         return allVariables.map(varName => {
             const initial = simulationResult.history[0][varName] || 0;
             const final = simulationResult.history[simulationResult.history.length - 1][varName] || 0;
             const change = final - initial;
             const changePercent = initial !== 0 ? (change / initial) * 100 : 0;
-            
+
             return {
                 name: getDisplayLabel(varName, viewMode as ViewMode),
                 fullName: varName,
@@ -172,16 +172,16 @@ export const AdvancedCharts: React.FC = () => {
     // Calculate radar data
     const radarData = useMemo(() => {
         if (!simulationResult) return [];
-        
+
         return allVariables.map(varName => {
             const bounds = getBounds(varName);
             const initial = simulationResult.history[0][varName] || 0;
             const final = simulationResult.history[simulationResult.history.length - 1][varName] || 0;
-            
+
             // Normalize to 0-100 for radar
             const normalizedInitial = ((initial - bounds.min) / (bounds.max - bounds.min)) * 100;
             const normalizedFinal = ((final - bounds.min) / (bounds.max - bounds.min)) * 100;
-            
+
             return {
                 subject: getDisplayLabel(varName, viewMode as ViewMode),
                 initial: normalizedInitial,
@@ -194,17 +194,17 @@ export const AdvancedCharts: React.FC = () => {
     // Calculate sensitivity (variance over time)
     const sensitivityData = useMemo(() => {
         if (!simulationResult) return [];
-        
+
         return allVariables.map(varName => {
             const values = simulationResult.history.map(h => h[varName] || 0);
             const mean = values.reduce((a, b) => a + b, 0) / values.length;
             const variance = values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / values.length;
             const stdDev = Math.sqrt(variance);
-            
+
             // Calculate rate of change
             const changes = values.slice(1).map((v, i) => Math.abs(v - values[i]));
             const avgChange = changes.reduce((a, b) => a + b, 0) / changes.length;
-            
+
             return {
                 name: getDisplayLabel(varName, viewMode as ViewMode),
                 fullName: varName,
@@ -218,7 +218,7 @@ export const AdvancedCharts: React.FC = () => {
     // Phase plot data
     const phaseData = useMemo(() => {
         if (!simulationResult || !phaseVarX || !phaseVarY) return [];
-        
+
         return simulationResult.history.map((point, index) => ({
             x: point[phaseVarX] || 0,
             y: point[phaseVarY] || 0,
@@ -229,23 +229,23 @@ export const AdvancedCharts: React.FC = () => {
     // Heatmap data
     const heatmapData = useMemo(() => {
         if (!simulationResult) return [];
-        
+
         // Sample data points to avoid too many
         const sampleRate = Math.max(1, Math.floor(simulationResult.history.length / 20));
         const sampledHistory = simulationResult.history.filter((_, i) => i % sampleRate === 0);
-        
+
         return sampledHistory.map((point, timeIndex) => {
             const row: Record<string, number | string> = {
                 time: simulationResult.time_points[timeIndex * sampleRate]?.toFixed(1) || String(timeIndex)
             };
-            
+
             allVariables.forEach(varName => {
                 const bounds = getBounds(varName);
                 const value = point[varName] || 0;
                 // Normalize to 0-1
                 row[varName] = (value - bounds.min) / (bounds.max - bounds.min);
             });
-            
+
             return row;
         });
     }, [simulationResult, allVariables]);
@@ -258,7 +258,7 @@ export const AdvancedCharts: React.FC = () => {
                         <div className="flex gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
                             <div className="flex-1">
                                 <label className="text-xs font-medium text-muted-foreground">X Axis</label>
-                                <select 
+                                <select
                                     value={phaseVarX}
                                     onChange={(e) => setPhaseVarX(e.target.value)}
                                     className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md bg-background"
@@ -270,7 +270,7 @@ export const AdvancedCharts: React.FC = () => {
                             </div>
                             <div className="flex-1">
                                 <label className="text-xs font-medium text-muted-foreground">Y Axis</label>
-                                <select 
+                                <select
                                     value={phaseVarY}
                                     onChange={(e) => setPhaseVarY(e.target.value)}
                                     className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md bg-background"
@@ -285,19 +285,19 @@ export const AdvancedCharts: React.FC = () => {
                             <ResponsiveContainer width="100%" height="100%">
                                 <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                    <XAxis 
-                                        type="number" 
-                                        dataKey="x" 
+                                    <XAxis
+                                        type="number"
+                                        dataKey="x"
                                         name={getDisplayLabel(phaseVarX, viewMode as ViewMode)}
                                         label={{ value: getDisplayLabel(phaseVarX, viewMode as ViewMode), position: 'bottom' }}
                                     />
-                                    <YAxis 
-                                        type="number" 
-                                        dataKey="y" 
+                                    <YAxis
+                                        type="number"
+                                        dataKey="y"
                                         name={getDisplayLabel(phaseVarY, viewMode as ViewMode)}
                                         label={{ value: getDisplayLabel(phaseVarY, viewMode as ViewMode), angle: -90, position: 'left' }}
                                     />
-                                    <Tooltip 
+                                    <Tooltip
                                         content={({ payload }) => {
                                             if (!payload?.length) return null;
                                             const data = payload[0].payload;
@@ -310,8 +310,8 @@ export const AdvancedCharts: React.FC = () => {
                                             );
                                         }}
                                     />
-                                    <Scatter 
-                                        data={phaseData} 
+                                    <Scatter
+                                        data={phaseData}
                                         line={{ stroke: chartColors.primary[0], strokeWidth: 2 }}
                                         shape={(props: any) => {
                                             const { cx, cy, payload } = props;
@@ -365,18 +365,18 @@ export const AdvancedCharts: React.FC = () => {
                                             {uniqueVars.map(varX => {
                                                 const correlation = correlationData.find(d => d.x === varX && d.y === varY)?.value || 0;
                                                 const intensity = Math.abs(correlation);
-                                                const color = correlation > 0 
-                                                    ? `rgba(34, 197, 94, ${intensity})` 
+                                                const color = correlation > 0
+                                                    ? `rgba(34, 197, 94, ${intensity})`
                                                     : `rgba(239, 68, 68, ${intensity})`;
                                                 return (
-                                                    <td 
+                                                    <td
                                                         key={`${varX}-${varY}`}
                                                         className="p-1"
                                                         title={`${varX} vs ${varY}: ${correlation.toFixed(2)}`}
                                                     >
-                                                        <div 
+                                                        <div
                                                             className="w-8 h-8 rounded flex items-center justify-center text-[10px] font-mono"
-                                                            style={{ 
+                                                            style={{
                                                                 backgroundColor: color,
                                                                 color: intensity > 0.5 ? 'white' : 'inherit'
                                                             }}
@@ -412,7 +412,7 @@ export const AdvancedCharts: React.FC = () => {
                                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} horizontal={true} vertical={false} />
                                 <XAxis type="number" tickFormatter={(v) => config.valueFormat === 'percentage' ? `${(v * 100).toFixed(0)}%` : v.toFixed(2)} />
                                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-                                <Tooltip 
+                                <Tooltip
                                     content={({ payload }) => {
                                         if (!payload?.length) return null;
                                         const data = payload[0].payload;
@@ -430,9 +430,9 @@ export const AdvancedCharts: React.FC = () => {
                                 />
                                 <Bar dataKey="change" radius={[0, 4, 4, 0]}>
                                     {waterfallData.map((entry, index) => (
-                                        <Cell 
-                                            key={`cell-${index}`} 
-                                            fill={entry.positive ? '#22c55e' : '#ef4444'} 
+                                        <Cell
+                                            key={`cell-${index}`}
+                                            fill={entry.positive ? '#22c55e' : '#ef4444'}
                                         />
                                     ))}
                                 </Bar>
@@ -449,25 +449,25 @@ export const AdvancedCharts: React.FC = () => {
                                 <PolarGrid gridType="polygon" />
                                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
                                 <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                                <Radar 
-                                    name="Initial" 
-                                    dataKey="initial" 
-                                    stroke={chartColors.secondary[0]} 
-                                    fill={chartColors.secondary[0]} 
+                                <Radar
+                                    name="Initial"
+                                    dataKey="initial"
+                                    stroke={chartColors.secondary[0]}
+                                    fill={chartColors.secondary[0]}
                                     fillOpacity={0.3}
                                     strokeWidth={2}
                                     strokeDasharray="5 5"
                                 />
-                                <Radar 
-                                    name="Final" 
-                                    dataKey="final" 
-                                    stroke={chartColors.primary[0]} 
-                                    fill={chartColors.primary[0]} 
+                                <Radar
+                                    name="Final"
+                                    dataKey="final"
+                                    stroke={chartColors.primary[0]}
+                                    fill={chartColors.primary[0]}
                                     fillOpacity={0.5}
                                     strokeWidth={2}
                                 />
                                 <Legend />
-                                <Tooltip 
+                                <Tooltip
                                     content={({ payload, label }) => {
                                         if (!payload?.length) return null;
                                         return (
@@ -495,7 +495,7 @@ export const AdvancedCharts: React.FC = () => {
                                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                                 <XAxis type="number" />
                                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-                                <Tooltip 
+                                <Tooltip
                                     content={({ payload }) => {
                                         if (!payload?.length) return null;
                                         const data = payload[0].payload;
@@ -539,14 +539,14 @@ export const AdvancedCharts: React.FC = () => {
                                                 // Color based on value (0-1)
                                                 const hue = value * 120; // 0 = red, 60 = yellow, 120 = green
                                                 return (
-                                                    <td 
+                                                    <td
                                                         key={varName}
                                                         className="p-0"
                                                         title={`${getDisplayLabel(varName, viewMode as ViewMode)}: ${(value * 100).toFixed(0)}%`}
                                                     >
-                                                        <div 
+                                                        <div
                                                             className="w-full h-6"
-                                                            style={{ 
+                                                            style={{
                                                                 backgroundColor: `hsl(${hue}, 70%, 50%)`,
                                                                 opacity: 0.7 + value * 0.3
                                                             }}

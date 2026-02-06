@@ -2,11 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, BarChart, Bar } from 'recharts';
 import { BarChart3, Table as TableIcon, TrendingUp, TrendingDown, Minus, Info, Lightbulb, Activity } from 'lucide-react';
-import { 
-    getDisplayLabel, 
-    formatValue, 
-    getTrendIndicator, 
-    getChartColors, 
+import {
+    getDisplayLabel,
+    formatValue,
+    getTrendIndicator,
+    getChartColors,
     getYAxisLabel,
     getTooltipContent,
     generateSummary,
@@ -21,9 +21,9 @@ type ResultTab = 'chart' | 'table' | 'summary' | 'advanced';
 // Custom tooltip component that adapts to view mode
 const CustomTooltip = ({ active, payload, label, viewMode }: any) => {
     if (!active || !payload || !payload.length) return null;
-    
+
     const config = VIEW_MODE_CONFIGS[viewMode as ViewMode];
-    
+
     return (
         <div className="bg-popover border rounded-lg shadow-lg p-3 max-w-xs">
             <p className="text-xs text-muted-foreground mb-2">
@@ -34,8 +34,8 @@ const CustomTooltip = ({ active, payload, label, viewMode }: any) => {
                 return (
                     <div key={idx} className="mb-2 last:mb-0">
                         <div className="flex items-center gap-2">
-                            <div 
-                                className="w-2 h-2 rounded-full" 
+                            <div
+                                className="w-2 h-2 rounded-full"
                                 style={{ backgroundColor: entry.color }}
                             />
                             <span className="text-sm font-medium">{tooltipData.label}</span>
@@ -85,21 +85,21 @@ export const SimulationResults: React.FC = () => {
         return simulationResult.history.map((point, index) => {
             const timeValue = simulationResult.time_points[index] ?? index;
             const dataPoint: Record<string, number> = { time: timeValue };
-            
+
             Array.from(selectedVariables).forEach(varName => {
                 const bounds = getComponentBounds(varName);
                 let value = point[varName] ?? 0;
-                
+
                 // Transform value based on view mode
                 if (config.valueFormat === 'percentage') {
                     value = ((value - bounds.min) / (bounds.max - bounds.min)) * 100;
                 } else if (config.valueFormat === 'score') {
                     value = ((value - bounds.min) / (bounds.max - bounds.min)) * 10;
                 }
-                
+
                 dataPoint[varName] = value;
             });
-            
+
             return dataPoint;
         });
     }, [simulationResult, selectedVariables, viewMode, model]);
@@ -112,9 +112,9 @@ export const SimulationResults: React.FC = () => {
             const initial = simulationResult.history[0][varName] || 0;
             const final = simulationResult.history[simulationResult.history.length - 1][varName] || 0;
             const mid = simulationResult.history[Math.floor(simulationResult.history.length / 2)][varName] || 0;
-            
+
             const trend = getTrendIndicator(final, initial, viewMode);
-            
+
             const parts = varName.split('.');
             const entity = parts[0] || '';
 
@@ -179,22 +179,22 @@ export const SimulationResults: React.FC = () => {
                 {chartType === 'area' ? (
                     <AreaChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis 
-                            dataKey="time" 
-                            label={{ 
-                                value: config.valueFormat === 'currency' ? 'Period' : 'Time', 
-                                position: 'insideBottom', 
-                                offset: -10 
+                        <XAxis
+                            dataKey="time"
+                            label={{
+                                value: config.valueFormat === 'currency' ? 'Period' : 'Time',
+                                position: 'insideBottom',
+                                offset: -10
                             }}
                             tick={{ fontSize: 12 }}
                         />
-                        <YAxis 
+                        <YAxis
                             label={{ value: yAxisLabel, angle: -90, position: 'insideLeft' }}
                             tick={{ fontSize: 12 }}
                             domain={config.valueFormat === 'percentage' ? [0, 100] : config.valueFormat === 'score' ? [0, 10] : ['auto', 'auto']}
                         />
                         <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
-                        <Legend 
+                        <Legend
                             formatter={(value) => getDisplayLabel(value, viewMode)}
                             wrapperStyle={{ fontSize: '12px' }}
                         />
@@ -216,22 +216,22 @@ export const SimulationResults: React.FC = () => {
                 ) : chartType === 'bar' ? (
                     <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis 
-                            dataKey="time" 
-                            label={{ 
-                                value: config.valueFormat === 'currency' ? 'Period' : 'Time', 
-                                position: 'insideBottom', 
-                                offset: -10 
+                        <XAxis
+                            dataKey="time"
+                            label={{
+                                value: config.valueFormat === 'currency' ? 'Period' : 'Time',
+                                position: 'insideBottom',
+                                offset: -10
                             }}
                             tick={{ fontSize: 12 }}
                         />
-                        <YAxis 
+                        <YAxis
                             label={{ value: yAxisLabel, angle: -90, position: 'insideLeft' }}
                             tick={{ fontSize: 12 }}
                             domain={config.valueFormat === 'percentage' ? [0, 100] : config.valueFormat === 'score' ? [0, 10] : ['auto', 'auto']}
                         />
                         <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
-                        <Legend 
+                        <Legend
                             formatter={(value) => getDisplayLabel(value, viewMode)}
                             wrapperStyle={{ fontSize: '12px' }}
                         />
@@ -250,22 +250,22 @@ export const SimulationResults: React.FC = () => {
                 ) : (
                     <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis 
-                            dataKey="time" 
-                            label={{ 
-                                value: config.valueFormat === 'currency' ? 'Period' : 'Time', 
-                                position: 'insideBottom', 
-                                offset: -10 
+                        <XAxis
+                            dataKey="time"
+                            label={{
+                                value: config.valueFormat === 'currency' ? 'Period' : 'Time',
+                                position: 'insideBottom',
+                                offset: -10
                             }}
                             tick={{ fontSize: 12 }}
                         />
-                        <YAxis 
+                        <YAxis
                             label={{ value: yAxisLabel, angle: -90, position: 'insideLeft' }}
                             tick={{ fontSize: 12 }}
                             domain={config.valueFormat === 'percentage' ? [0, 100] : config.valueFormat === 'score' ? [0, 10] : ['auto', 'auto']}
                         />
                         <Tooltip content={<CustomTooltip viewMode={viewMode} />} />
-                        <Legend 
+                        <Legend
                             formatter={(value) => getDisplayLabel(value, viewMode)}
                             wrapperStyle={{ fontSize: '12px' }}
                         />
@@ -304,7 +304,7 @@ export const SimulationResults: React.FC = () => {
                         )}
                     >
                         <BarChart3 className="w-4 h-4" />
-                        {viewMode === 'executive' ? 'Trends' : viewMode === 'investor' ? 'Projections' : 'Charts'}
+                        {viewMode === 'executive' ? 'Trends' : viewMode === 'analyst' ? 'Projections' : 'Charts'}
                     </button>
                     <button
                         onClick={() => setActiveTab('table')}
@@ -316,7 +316,7 @@ export const SimulationResults: React.FC = () => {
                         )}
                     >
                         <TableIcon className="w-4 h-4" />
-                        {viewMode === 'executive' ? 'KPIs' : viewMode === 'investor' ? 'Metrics' : 'Data'}
+                        {viewMode === 'executive' ? 'KPIs' : viewMode === 'analyst' ? 'Metrics' : 'Data'}
                     </button>
                     <button
                         onClick={() => setActiveTab('summary')}
@@ -328,7 +328,7 @@ export const SimulationResults: React.FC = () => {
                         )}
                     >
                         <Lightbulb className="w-4 h-4" />
-                        {viewMode === 'executive' ? 'Insights' : viewMode === 'investor' ? 'Analysis' : 'Summary'}
+                        {viewMode === 'executive' ? 'Insights' : viewMode === 'analyst' ? 'Analysis' : 'Summary'}
                     </button>
                     <button
                         onClick={() => setActiveTab('advanced')}
@@ -340,7 +340,7 @@ export const SimulationResults: React.FC = () => {
                         )}
                     >
                         <Activity className="w-4 h-4" />
-                        {viewMode === 'executive' ? 'Deep Analysis' : viewMode === 'investor' ? 'Risk Analysis' : viewMode === 'sales' ? 'Opportunities' : 'Advanced'}
+                        {viewMode === 'executive' ? 'Deep Analysis' : viewMode === 'analyst' ? 'Causal Analysis' : viewMode === 'levers' ? 'Opportunities' : 'Advanced'}
                     </button>
                 </div>
 
@@ -353,8 +353,8 @@ export const SimulationResults: React.FC = () => {
                                 onClick={() => setChartType(type)}
                                 className={cn(
                                     "px-2 py-1 text-xs font-medium rounded transition-colors capitalize",
-                                    chartType === type 
-                                        ? 'bg-background shadow-sm' 
+                                    chartType === type
+                                        ? 'bg-background shadow-sm'
                                         : 'text-muted-foreground hover:text-foreground'
                                 )}
                             >
@@ -372,22 +372,22 @@ export const SimulationResults: React.FC = () => {
                         {/* Variable Selector */}
                         <div className="w-64 border-r bg-card overflow-y-auto p-3">
                             <h3 className="text-sm font-semibold mb-2">
-                                {viewMode === 'executive' ? 'Key Metrics' : 
-                                 viewMode === 'investor' ? 'Indicators' : 
-                                 viewMode === 'sales' ? 'Opportunities' : 'Variables'}
+                                {viewMode === 'executive' ? 'Key Metrics' :
+                                    viewMode === 'analyst' ? 'Indicators' :
+                                        viewMode === 'levers' ? 'Opportunities' : 'Variables'}
                             </h3>
                             <div className="space-y-1">
                                 {allVariables.map((varName, idx) => {
                                     const displayName = getDisplayLabel(varName, viewMode);
                                     const data = tableData.find(d => d.fullName === varName);
-                                    
+
                                     return (
                                         <label
                                             key={varName}
                                             className={cn(
                                                 "flex items-center gap-2 p-2 rounded cursor-pointer transition-colors",
-                                                selectedVariables.has(varName) 
-                                                    ? "bg-primary/10 border border-primary/30" 
+                                                selectedVariables.has(varName)
+                                                    ? "bg-primary/10 border border-primary/30"
                                                     : "hover:bg-accent border border-transparent"
                                             )}
                                         >
@@ -433,17 +433,17 @@ export const SimulationResults: React.FC = () => {
                             <thead className="sticky top-0 z-10">
                                 <tr className="bg-card">
                                     <th className="text-left p-3 border-b font-semibold bg-card">
-                                        {viewMode === 'executive' ? 'Metric' : 
-                                         viewMode === 'investor' ? 'Indicator' : 'Component'}
+                                        {viewMode === 'executive' ? 'Metric' :
+                                            viewMode === 'analyst' ? 'Indicator' : 'Component'}
                                     </th>
                                     <th className="text-left p-3 border-b font-semibold bg-card">
-                                        {viewMode === 'investor' ? 'Category' : 'Entity'}
+                                        {viewMode === 'analyst' ? 'Category' : 'Entity'}
                                     </th>
                                     <th className="text-right p-3 border-b font-semibold bg-card">
-                                        {viewMode === 'investor' ? 'Baseline' : 'Initial'}
+                                        {viewMode === 'analyst' ? 'Baseline' : 'Initial'}
                                     </th>
                                     <th className="text-right p-3 border-b font-semibold bg-card">
-                                        {viewMode === 'investor' ? 'Projected' : 'Final'}
+                                        {viewMode === 'analyst' ? 'Projected' : 'Final'}
                                     </th>
                                     <th className="text-center p-3 border-b font-semibold bg-card">
                                         {viewMode === 'executive' ? 'Status' : 'Trend'}
@@ -487,10 +487,10 @@ export const SimulationResults: React.FC = () => {
                     <div className="h-full overflow-auto p-6">
                         <div className="max-w-2xl mx-auto">
                             <h2 className="text-xl font-bold mb-4">{summary.title}</h2>
-                            
+
                             <div className="space-y-3">
                                 {summary.points.map((point, idx) => (
-                                    <div 
+                                    <div
                                         key={idx}
                                         className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg"
                                     >
@@ -505,7 +505,7 @@ export const SimulationResults: React.FC = () => {
                             {/* Quick Stats */}
                             <div className="mt-6 grid grid-cols-3 gap-4">
                                 {tableData.slice(0, 6).map((item) => (
-                                    <div 
+                                    <div
                                         key={item.fullName}
                                         className="p-4 border rounded-lg bg-card"
                                     >

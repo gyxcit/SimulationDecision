@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
 import type { Component, Influence } from '../types';
-import { Calculator, List, Plus, Trash2, X, Eye } from 'lucide-react';
+import { Calculator, List, Plus, Trash2, X } from 'lucide-react';
 import { getDisplayLabel, formatValue, VIEW_MODE_CONFIGS } from '../lib/viewModes';
-import { cn } from '../lib/utils';
 
 export const Inspector: React.FC = () => {
-    const { model, selectedNode, updateParameter, viewMode } = useStore();
-    const config = VIEW_MODE_CONFIGS[viewMode];
+    const { model, selectedNode, updateParameter } = useStore();
 
     if (!model || !selectedNode) return (
         <div className="p-8 text-center text-muted-foreground text-sm">
@@ -54,7 +52,7 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
     const { model, viewMode } = useStore();
     const [inspectorViewMode, setInspectorViewMode] = useState<'list' | 'equation'>('list');
     const [showAddInfluence, setShowAddInfluence] = useState(false);
-    
+
     const config = VIEW_MODE_CONFIGS[viewMode];
     const displayName = getDisplayLabel(path, viewMode);
 
@@ -95,8 +93,8 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
                 {!config.showRawValues && (
                     <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
                         <p className="text-xs text-muted-foreground">
-                            {viewMode === 'executive' ? 'Current Performance' : 
-                             viewMode === 'investor' ? 'Current Index' : 'Current Score'}
+                            {viewMode === 'executive' ? 'Current Performance' :
+                                viewMode === 'analyst' ? 'Current Index' : 'Current Score'}
                         </p>
                         <p className="text-2xl font-bold text-primary mt-1">
                             {formatValue(component.initial, viewMode, component.min ?? 0, component.max ?? 1)}
@@ -115,8 +113,8 @@ const ComponentInspector: React.FC<ComponentInspectorProps> = ({ path, name, com
                         <label className="text-sm font-medium flex justify-between">
                             {config.showRawValues ? 'Initial Value' : 'Value'}
                             <span className="text-muted-foreground font-mono">
-                                {config.showRawValues 
-                                    ? component.initial.toFixed(4) 
+                                {config.showRawValues
+                                    ? component.initial.toFixed(4)
                                     : formatValue(component.initial, viewMode, component.min ?? 0, component.max ?? 1)
                                 }
                             </span>
@@ -424,7 +422,7 @@ const EquationView: React.FC<EquationViewProps> = ({ componentName, componentPat
         const coef = Math.abs(inf.coef).toFixed(2);
         const funcSym = getFunctionSymbol(inf.function);
         const varName = inf.from.split('.').pop() || inf.from;
-        
+
         if (inf.function === 'linear') {
             return `${sign} ${coef} × ${varName}`;
         } else if (inf.function === 'sqrt') {
@@ -489,9 +487,8 @@ const EquationView: React.FC<EquationViewProps> = ({ componentName, componentPat
                 {influences.map((inf, index) => (
                     <div
                         key={index}
-                        className={`p-2 rounded border cursor-pointer transition-all ${
-                            !inf.enabled ? 'opacity-40 bg-gray-50' : 'bg-white hover:border-blue-300 hover:shadow-sm'
-                        } ${editingIndex === index ? 'ring-2 ring-blue-400' : ''}`}
+                        className={`p-2 rounded border cursor-pointer transition-all ${!inf.enabled ? 'opacity-40 bg-gray-50' : 'bg-white hover:border-blue-300 hover:shadow-sm'
+                            } ${editingIndex === index ? 'ring-2 ring-blue-400' : ''}`}
                         onClick={() => setEditingIndex(editingIndex === index ? null : index)}
                     >
                         <div className="flex items-center justify-between">

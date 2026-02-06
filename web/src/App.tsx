@@ -8,7 +8,7 @@ import { SimulationsManager } from './components/SimulationsManager';
 import { VisualizationView } from './components/VisualizationPanel';
 import { AIChatPanel } from './components/AIChatPanel';
 import { useStore } from './store/useStore';
-import { Wand2, X, ChevronUp, ChevronDown, Bot, MessageSquare } from 'lucide-react';
+import { Wand2, X, ChevronUp, ChevronDown, Bot } from 'lucide-react';
 
 function App() {
   const { model, generateModel, isLoading, useV7, toggleV7 } = useStore();
@@ -91,11 +91,10 @@ function App() {
                 {/* AI Chat Toggle Button */}
                 <button
                   onClick={() => setAiPanelState(aiPanelState === 'collapsed' ? 'normal' : 'collapsed')}
-                  className={`absolute top-[72px] right-4 z-10 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
-                    aiPanelState !== 'collapsed' 
-                      ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                  className={`absolute top-[72px] right-4 z-10 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${aiPanelState !== 'collapsed'
+                      ? 'bg-purple-600 text-white hover:bg-purple-700'
                       : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
-                  }`}
+                    }`}
                   title={aiPanelState !== 'collapsed' ? "Masquer l'assistant AI" : "Afficher l'assistant AI"}
                 >
                   <Bot className="w-5 h-5" />
@@ -172,7 +171,7 @@ function App() {
               </div>
 
               {/* Bottom Results Panel - Collapsible */}
-              <div 
+              <div
                 className="border-t bg-card transition-all duration-300 overflow-hidden flex flex-col"
                 style={{ height: `${resultsPanelHeight[resultsPanelState]}px` }}
               >
@@ -229,10 +228,9 @@ function App() {
         {activeView === 'canvas' && (
           <div className="flex">
             {/* AI Chat Panel */}
-            <div 
-              className={`border-l bg-card transition-all duration-300 overflow-hidden flex flex-col ${
-                aiPanelState === 'collapsed' ? 'w-0 border-l-0' : ''
-              }`}
+            <div
+              className={`border-l bg-card transition-all duration-300 overflow-hidden flex flex-col ${aiPanelState === 'collapsed' ? 'w-0 border-l-0' : ''
+                }`}
               style={{ width: aiPanelState === 'collapsed' ? 0 : `${aiPanelWidth[aiPanelState]}px` }}
             >
               {aiPanelState !== 'collapsed' && (
