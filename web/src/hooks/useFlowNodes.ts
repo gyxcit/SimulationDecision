@@ -154,8 +154,9 @@ export const useFlowNodes = () => {
                     }
                 }
 
-                // Create Edges for influences
-                comp.influences.forEach(inf => {
+                // Create Edges for influences (with safety check)
+                const influences = Array.isArray(comp.influences) ? comp.influences : [];
+                influences.forEach(inf => {
                     let sourceId = inf.from;
 
                     // Resolve the source ID

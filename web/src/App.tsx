@@ -7,6 +7,9 @@ import { SimulationResults } from './components/SimulationResults';
 import { SimulationsManager } from './components/SimulationsManager';
 import { VisualizationView } from './components/VisualizationPanel';
 import { AIChatPanel } from './components/AIChatPanel';
+import { AIExplanationPage } from './components/AIExplanationPage';
+import { AILogsPage } from './components/AILogsPage';
+import { DataInspectorPanel } from './components/DataInspectorPanel';
 import { useStore } from './store/useStore';
 import { Wand2, X, ChevronUp, ChevronDown, Bot } from 'lucide-react';
 
@@ -15,9 +18,10 @@ function App() {
   const [prompt, setPrompt] = useState('');
   const [showPrompt, setShowPrompt] = useState(!model); // Show if no model
   const [inspectorVisible, setInspectorVisible] = useState(true);
-  const [activeView, setActiveView] = useState<'canvas' | 'simulations' | 'visualization'>('canvas');
+  const [activeView, setActiveView] = useState<'canvas' | 'simulations' | 'visualization' | 'ai-explanation' | 'ai-logs'>('canvas');
   const [resultsPanelState, setResultsPanelState] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [aiPanelState, setAiPanelState] = useState<'collapsed' | 'normal' | 'expanded'>('collapsed');
+  const [showDataInspector, setShowDataInspector] = useState(false);
 
   const resultsPanelHeight = {
     collapsed: 40,
@@ -44,6 +48,8 @@ function App() {
       <TopBar
         currentView={activeView}
         onNavigateHome={() => setActiveView('canvas')}
+        showDataInspector={showDataInspector}
+        onToggleDataInspector={() => setShowDataInspector(!showDataInspector)}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -101,6 +107,12 @@ function App() {
                 </button>
 
                 <Flow />
+
+                {/* Data Inspector Panel */}
+                <DataInspectorPanel
+                  isOpen={showDataInspector}
+                  onClose={() => setShowDataInspector(false)}
+                />
 
                 {/* Generator Overlay */}
                 {showPrompt && (
@@ -217,11 +229,19 @@ function App() {
             <div className="h-full overflow-hidden">
               <SimulationsManager />
             </div>
-          ) : (
+          ) : activeView === 'visualization' ? (
             <div className="h-full overflow-hidden">
               <VisualizationView />
             </div>
-          )}
+          ) : activeView === 'ai-explanation' ? (
+            <div className="h-full overflow-hidden">
+              <AIExplanationPage />
+            </div>
+          ) : activeView === 'ai-logs' ? (
+            <div className="h-full overflow-hidden">
+              <AILogsPage />
+            </div>
+          ) : null}
         </div>
 
         {/* Right Side: AI Panel + Inspector - Only shown in canvas view */}

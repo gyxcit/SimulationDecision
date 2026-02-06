@@ -33,9 +33,19 @@ Rules:
 - No explanations.
 - No comments.
 - All fields must exist.
-- Use default bounds min=0, max=1 when relevant.
+- USE REALISTIC VALUES based on the domain context:
+  * Financial values: Use real amounts (e.g., budget: 10000-1000000, revenue: 1000-500000)
+  * Population/counts: Use realistic numbers (e.g., employees: 10-500, customers: 100-10000)
+  * Rates/percentages: Use 0-100 scale (e.g., satisfaction: 0-100, efficiency: 0-100)
+  * Time periods: Use appropriate units (e.g., hours: 1-40, months: 1-12)
+  * Physical quantities: Use realistic SI values
+  * DO NOT use 0-1 normalized values unless truly appropriate (like probability)
 - Add a decay influence to each state component.
 - Use linear influences by default.
+- IMPORTANT: Adjust coefficients based on value scales:
+  * If source is large (100000) affecting small target (50): use small coef like 0.0001
+  * If source is small (10) affecting large target (10000): use larger coef like 100
+  * Same-scale variables: use coef between -2 and 2
 - Limit to 3–5 components per entity.
 - Validate before answering.
 
@@ -51,13 +61,13 @@ SystemModel:
       components: {
         <component_name>: {
           type: "state" | "computed" | "constant",
-          initial: number,
-          min: number | null,
-          max: number | null,
+          initial: number,      // USE REALISTIC VALUE FOR THE DOMAIN
+          min: number | null,   // USE REALISTIC MIN FOR THE DOMAIN
+          max: number | null,   // USE REALISTIC MAX FOR THE DOMAIN
           influences: [
             {
               from: string,
-              coef: number,
+              coef: number,     // ADJUST BASED ON SOURCE/TARGET SCALES
               kind: "positive" | "negative" | "decay" | "ratio",
               function: "linear" | "sigmoid" | "threshold" | "division",
               enabled: boolean

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, RotateCcw, Download, Upload, Activity, Home, Box, Layers } from 'lucide-react';
+import { Play, RotateCcw, Download, Upload, Activity, Home, Box, Layers, Database } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../lib/utils';
 import { ViewModeSelector } from './ViewModeSelector';
@@ -7,9 +7,11 @@ import { ViewModeSelector } from './ViewModeSelector';
 interface TopBarProps {
     currentView?: 'canvas' | 'simulations' | 'visualization';
     onNavigateHome?: () => void;
+    showDataInspector?: boolean;
+    onToggleDataInspector?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNavigateHome }) => {
+export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNavigateHome, showDataInspector, onToggleDataInspector }) => {
     const { model, runSimulation, isLoading, showEntityBoxes, toggleEntityBoxes } = useStore();
 
     return (
@@ -72,6 +74,22 @@ export const TopBar: React.FC<TopBarProps> = ({ currentView = 'canvas', onNaviga
                             title={showEntityBoxes ? "Masquer les boîtes d'entités" : "Afficher les boîtes d'entités"}
                         >
                             {showEntityBoxes ? <Box className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+                        </button>
+                    )}
+
+                    {/* Data Inspector Toggle - Only show on canvas view */}
+                    {currentView === 'canvas' && onToggleDataInspector && (
+                        <button
+                            onClick={onToggleDataInspector}
+                            className={cn(
+                                "p-1.5 rounded-md transition-colors",
+                                showDataInspector 
+                                    ? "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20" 
+                                    : "hover:bg-accent text-muted-foreground"
+                            )}
+                            title={showDataInspector ? "Fermer le Data Inspector" : "Ouvrir le Data Inspector"}
+                        >
+                            <Database className="w-4 h-4" />
                         </button>
                     )}
                 </div>

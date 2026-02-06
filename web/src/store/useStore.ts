@@ -5,6 +5,23 @@ import type { ExplainableResult } from '../types/explainability';
 import { analyzeSimulation } from '../lib/explainabilityEngine';
 import axios from 'axios';
 
+// AI Log entry for tracking AI operations
+export interface AILogEntry {
+    id: string;
+    timestamp: Date;
+    type: 'edit' | 'generation' | 'explanation' | 'analysis';
+    target?: string; // Entity.Component or Entity
+    description: string;
+    prompt?: string;
+    changes?: {
+        field: string;
+        oldValue: unknown;
+        newValue: unknown;
+    }[];
+    result?: string;
+    viewMode?: ViewMode;
+}
+
 // Stored simulation for comparison
 export interface StoredSimulation {
     id: string;
@@ -64,6 +81,24 @@ interface AppState {
     computeExplainability: () => void;
     setCrossFilter: (variable: string | null) => void;
     setHighlightedPath: (path: string[] | null) => void;
+
+    // AI Logs state
+    aiLogs: AILogEntry[];
+    addAILog: (log: Omit<AILogEntry, 'id' | 'timestamp'>) => void;
+    clearAILogs: () => void;
+
+    // Connection mode state
+    connectionMode: {
+        active: boolean;
+        from: string | null; // "Entity.Component" or "Entity"
+    };
+    startConnection: (from: string) => void;
+    cancelConnection: () => void;
+
+    // Simulation variable selection
+    simulationIncludedVars: string[]; // List of variables to include in simulation (all by default)
+    toggleSimulationVariable: (path: string) => void;
+    setAllSimulationVariables: (include: boolean) => void;
 }
 
 const API_URL = 'http://localhost:8000';
@@ -147,8 +182,22 @@ const saveSimulationResultToStorage = (result: SimulationResult | null) => {
     }
 };
 
+// Get all variable paths from a model
+const getAllVariablePaths = (model: SystemModel | null): string[] => {
+    if (!model) return [];
+    const paths: string[] = [];
+    Object.entries(model.entities).forEach(([entityName, entity]) => {
+        Object.keys(entity.components).forEach(compName => {
+            paths.push(`${entityName}.${compName}`);
+        });
+    });
+    return paths;
+};
+
+const initialModel = loadModelFromStorage();
+
 export const useStore = create<AppState>((set, get) => ({
-    model: loadModelFromStorage(), // Load from localStorage on init
+    model: initialModel, // Load from localStorage on init
     simulationResult: loadSimulationResultFromStorage(), // Load simulation result from localStorage
     storedSimulations: loadSimulationsFromStorage(), // Load stored simulations
     isLoading: false,
@@ -162,8 +211,55 @@ export const useStore = create<AppState>((set, get) => ({
     crossFilterVariable: null,
     highlightedPath: null,
 
+    // AI Logs initial state
+    aiLogs: [],
+
+    // Connection mode initial state
+    connectionMode: {
+        active: false,
+        from: null
+    },
+
+    // Simulation variable selection - all variables by default
+    simulationIncludedVars: getAllVariablePaths(initialModel),
+
+    startConnection: (from) => set({ connectionMode: { active: true, from } }),
+    cancelConnection: () => set({ connectionMode: { active: false, from: null } }),
+
+    toggleSimulationVariable: (path) => {
+        const { simulationIncludedVars } = get();
+        if (simulationIncludedVars.includes(path)) {
+            set({ simulationIncludedVars: simulationIncludedVars.filter(p => p !== path) });
+        } else {
+            set({ simulationIncludedVars: [...simulationIncludedVars, path] });
+        }
+    },
+
+    setAllSimulationVariables: (include) => {
+        const { model } = get();
+        if (!model) return;
+        if (include) {
+            const allPaths: string[] = [];
+            Object.entries(model.entities).forEach(([entityName, entity]) => {
+                Object.keys(entity.components).forEach(compName => {
+                    allPaths.push(`${entityName}.${compName}`);
+                });
+            });
+            set({ simulationIncludedVars: allPaths });
+        } else {
+            set({ simulationIncludedVars: [] });
+        }
+    },
+
     setModel: (model) => {
-        set({ model });
+        // Initialize all variables as included for simulation
+        const allPaths: string[] = [];
+        Object.entries(model.entities).forEach(([entityName, entity]) => {
+            Object.keys(entity.components).forEach(compName => {
+                allPaths.push(`${entityName}.${compName}`);
+            });
+        });
+        set({ model, simulationIncludedVars: allPaths });
         saveModelToStorage(model);
     },
 
@@ -438,23 +534,44 @@ export const useStore = create<AppState>((set, get) => ({
 
     addComponent: (entityName, componentName, component) => {
         set((state) => {
-            if (!state.model) return state;
+            if (!state.model) {
+                console.error('No model exists to add component to');
+                return state;
+            }
 
             const newModel = JSON.parse(JSON.stringify(state.model));
 
-            // Check entity exists
-            if (!newModel.entities[entityName]) return state;
+            // Create entity if it doesn't exist
+            if (!newModel.entities[entityName]) {
+                console.log(`Creating entity ${entityName} for new component`);
+                newModel.entities[entityName] = {
+                    description: '',
+                    components: {}
+                };
+            }
 
             // Don't add if component already exists
-            if (newModel.entities[entityName].components[componentName]) return state;
+            if (newModel.entities[entityName].components[componentName]) {
+                console.log(`Component ${entityName}.${componentName} already exists`);
+                return state;
+            }
 
+            // Add component with proper structure
             newModel.entities[entityName].components[componentName] = {
                 type: component.type || 'state',
                 initial: component.initial ?? 0,
-                min: component.min ?? 0,
-                max: component.max ?? 1,
-                influences: component.influences || []
+                min: component.min ?? null,
+                max: component.max ?? null,
+                influences: (component.influences || []).map((inf: any) => ({
+                    from: inf.from,
+                    coef: inf.coef ?? 0.1,
+                    kind: inf.kind || 'positive',
+                    function: inf.function || 'linear',
+                    enabled: inf.enabled !== false
+                }))
             };
+
+            console.log(`Added component ${entityName}.${componentName}:`, newModel.entities[entityName].components[componentName]);
 
             saveModelToStorage(newModel);
             return { model: newModel };
@@ -563,5 +680,21 @@ export const useStore = create<AppState>((set, get) => ({
 
     setHighlightedPath: (path: string[] | null) => {
         set({ highlightedPath: path });
+    },
+
+    // AI Logs actions
+    addAILog: (log) => {
+        const newLog: AILogEntry = {
+            ...log,
+            id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date(),
+        };
+        set((state) => ({
+            aiLogs: [newLog, ...state.aiLogs].slice(0, 100), // Keep last 100 logs
+        }));
+    },
+
+    clearAILogs: () => {
+        set({ aiLogs: [] });
     },
 }));

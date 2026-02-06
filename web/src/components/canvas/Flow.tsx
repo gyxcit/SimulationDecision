@@ -8,7 +8,7 @@ import { ComponentNode } from './ComponentNode';
 
 export const Flow: React.FC = () => {
     const { nodes, edges, onNodesChange, onEdgesChange } = useFlowNodes();
-    const { selectNode } = useStore();
+    const { selectNode, cancelConnection } = useStore();
 
     // Register custom node types
     const nodeTypes = useMemo(() => ({
@@ -24,7 +24,10 @@ export const Flow: React.FC = () => {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={(_, node) => selectNode(node.id)}
-                onPaneClick={() => selectNode(null)} // Deselect when clicking canvas
+                onPaneClick={() => {
+                    selectNode(null);
+                    cancelConnection();
+                }} // Deselect when clicking canvas
                 nodeTypes={nodeTypes}
                 fitView
                 attributionPosition="bottom-right"

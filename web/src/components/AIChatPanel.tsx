@@ -157,23 +157,46 @@ export const AIChatPanel: React.FC = () => {
             case 'add_component': {
                 // target format: "EntityName.componentName" or from details
                 let entityName = details?.entity;
-                let componentName = details?.name;
+                let componentName = details?.name || details?.componentName;
                 
                 if (!entityName && target) {
                     const parts = target.split('.');
                     entityName = parts[0];
-                    componentName = parts[1];
+                    componentName = parts[1] || componentName;
                 }
                 
+                console.log('add_component action:', { entityName, componentName, details, target });
+                
                 if (entityName && componentName) {
-                    const componentData = details?.component || {
-                        type: 'state',
-                        initial: details?.initial ?? 0,
-                        min: details?.min ?? 0,
-                        max: details?.max ?? 1,
-                        influences: details?.influences || []
+                    // First ensure entity exists
+                    if (!model?.entities[entityName]) {
+                        console.log(`Entity ${entityName} doesn't exist, creating it first`);
+                        addEntity(entityName, `Entity for ${componentName}`);
+                    }
+                    
+                    // Prepare component data with realistic defaults
+                    const componentData = {
+                        type: (details?.type || details?.component?.type || 'state') as 'state' | 'computed' | 'constant',
+                        initial: details?.initial ?? details?.value ?? details?.component?.initial ?? 100,
+                        min: details?.min ?? details?.component?.min ?? null,
+                        max: details?.max ?? details?.component?.max ?? null,
+                        influences: (details?.influences || details?.component?.influences || []).map((inf: any) => ({
+                            from: inf.from,
+                            coef: inf.coef ?? 0.1,
+                            kind: inf.kind || 'positive',
+                            function: inf.function || 'linear',
+                            enabled: inf.enabled !== false
+                        }))
                     };
-                    addComponent(entityName, componentName, componentData);
+                    
+                    console.log(`Adding component ${entityName}.${componentName}:`, componentData);
+                    
+                    // Use a small delay to ensure entity is created first
+                    setTimeout(() => {
+                        addComponent(entityName!, componentName!, componentData);
+                    }, 50);
+                } else {
+                    console.error('Missing entity or component name for add_component action', { entityName, componentName, details });
                 }
                 break;
             }
@@ -240,6 +263,27 @@ export const AIChatPanel: React.FC = () => {
                 if (targetPath && model) {
                     const newModel = JSON.parse(JSON.stringify(model));
                     const [entityName, compName] = targetPath.split('.');
+                    
+                    // Create entity if it doesn't exist
+                    if (entityName && !newModel.entities[entityName]) {
+                        console.log(`Creating entity ${entityName} for modify action`);
+                        newModel.entities[entityName] = {
+                            description: '',
+                            components: {}
+                        };
+                    }
+                    
+                    // Create component if it doesn't exist
+                    if (entityName && compName && !newModel.entities[entityName]?.components[compName]) {
+                        console.log(`Creating component ${entityName}.${compName} for modify action`);
+                        newModel.entities[entityName].components[compName] = {
+                            type: details?.type || 'state',
+                            initial: details?.initial ?? 100,
+                            min: details?.min ?? null,
+                            max: details?.max ?? null,
+                            influences: details?.influences || []
+                        };
+                    }
                     
                     if (newModel.entities[entityName]?.components[compName]) {
                         if (details?.initial !== undefined) {

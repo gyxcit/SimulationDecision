@@ -1,8 +1,11 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
+import { ChevronDown, ChevronRight, Check, X } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 export const SimulationConfig: React.FC = () => {
-    const { model, updateSimulationConfig } = useStore();
+    const { model, updateSimulationConfig, simulationIncludedVars, toggleSimulationVariable, setAllSimulationVariables } = useStore();
+    const [expandedEntities, setExpandedEntities] = React.useState<Set<string>>(new Set());
 
     if (!model) return null;
 
@@ -117,6 +120,142 @@ export const SimulationConfig: React.FC = () => {
                 </div>
                 <div className="text-[10px] text-muted-foreground">
                     {model.simulation.steps} itérations × {model.simulation.dt} = résultat final
+                </div>
+            </div>
+
+            {/* Variable Selection */}
+            <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Variables à Simuler
+                </h3>
+                
+                {/* Quick Actions */}
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setAllSimulationVariables(true)}
+                        className="flex-1 px-2 py-1 text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded flex items-center justify-center gap-1"
+                    >
+                        <Check className="w-3 h-3" />
+                        Tout
+                    </button>
+                    <button
+                        onClick={() => setAllSimulationVariables(false)}
+                        className="flex-1 px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200 rounded flex items-center justify-center gap-1"
+                    >
+                        <X className="w-3 h-3" />
+                        Aucun
+                    </button>
+                </div>
+
+                {/* Variable Count */}
+                <div className="text-xs text-muted-foreground text-center">
+                    {simulationIncludedVars.length} / {Object.values(model.entities).reduce((acc, e) => acc + Object.keys(e.components).length, 0)} variables sélectionnées
+                </div>
+
+                {/* Entity/Component List */}
+                <div className="space-y-1 max-h-60 overflow-y-auto border rounded p-2 bg-background">
+                    {Object.entries(model.entities).map(([entityName, entity]) => {
+                        const entityComponents = Object.keys(entity.components);
+                        const includedCount = entityComponents.filter(c => 
+                            simulationIncludedVars.includes(`${entityName}.${c}`)
+                        ).length;
+                        const isExpanded = expandedEntities.has(entityName);
+                        const allSelected = includedCount === entityComponents.length;
+                        const someSelected = includedCount > 0 && !allSelected;
+
+                        return (
+                            <div key={entityName} className="border rounded overflow-hidden">
+                                <div 
+                                    className="flex items-center justify-between p-2 bg-muted/30 cursor-pointer hover:bg-muted/50"
+                                    onClick={() => {
+                                        const newSet = new Set(expandedEntities);
+                                        if (isExpanded) {
+                                            newSet.delete(entityName);
+                                        } else {
+                                            newSet.add(entityName);
+                                        }
+                                        setExpandedEntities(newSet);
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {isExpanded 
+                                            ? <ChevronDown className="w-3 h-3" />
+                                            : <ChevronRight className="w-3 h-3" />
+                                        }
+                                        <span className="text-xs font-medium">{entityName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className={cn(
+                                            "text-[10px] px-1.5 py-0.5 rounded",
+                                            allSelected ? "bg-green-100 text-green-700" :
+                                            someSelected ? "bg-yellow-100 text-yellow-700" :
+                                            "bg-red-100 text-red-700"
+                                        )}>
+                                            {includedCount}/{entityComponents.length}
+                                        </span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                // Toggle all components in this entity
+                                                entityComponents.forEach(compName => {
+                                                    const path = `${entityName}.${compName}`;
+                                                    const isIncluded = simulationIncludedVars.includes(path);
+                                                    if (allSelected && isIncluded) {
+                                                        toggleSimulationVariable(path);
+                                                    } else if (!allSelected && !isIncluded) {
+                                                        toggleSimulationVariable(path);
+                                                    }
+                                                });
+                                            }}
+                                            className={cn(
+                                                "w-5 h-5 rounded border flex items-center justify-center",
+                                                allSelected ? "bg-primary border-primary text-primary-foreground" :
+                                                someSelected ? "bg-primary/50 border-primary" : "border-muted-foreground"
+                                            )}
+                                        >
+                                            {allSelected && <Check className="w-3 h-3" />}
+                                            {someSelected && <div className="w-2 h-0.5 bg-primary-foreground" />}
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {isExpanded && (
+                                    <div className="p-1 space-y-1 bg-background">
+                                        {entityComponents.map(compName => {
+                                            const path = `${entityName}.${compName}`;
+                                            const isIncluded = simulationIncludedVars.includes(path);
+                                            const comp = entity.components[compName];
+                                            
+                                            return (
+                                                <label
+                                                    key={compName}
+                                                    className="flex items-center gap-2 p-1.5 hover:bg-muted/30 rounded cursor-pointer"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isIncluded}
+                                                        onChange={() => toggleSimulationVariable(path)}
+                                                        className="w-4 h-4 rounded border-muted-foreground accent-primary"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className="text-xs truncate">{compName}</span>
+                                                    </div>
+                                                    <span className={cn(
+                                                        "text-[10px] px-1 rounded",
+                                                        comp.type === 'state' ? "bg-blue-100 text-blue-700" :
+                                                        comp.type === 'computed' ? "bg-green-100 text-green-700" :
+                                                        "bg-gray-100 text-gray-700"
+                                                    )}>
+                                                        {comp.type}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>

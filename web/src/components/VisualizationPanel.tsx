@@ -105,11 +105,13 @@ export const VisualizationPanel: React.FC = () => {
 
 // Full page visualization view
 export const VisualizationView: React.FC = () => {
-    const { simulationResult, model, storedSimulations, viewMode } = useStore();
+    const { simulationResult, model, storedSimulations, viewMode, addAILog } = useStore();
     const [selectedCharts, setSelectedCharts] = useState<ChartType[]>(['timeSeries']);
     const [fullscreenChart, setFullscreenChart] = useState<ChartType | null>(null);
     const [activeChartForConfig, setActiveChartForConfig] = useState<ChartType | null>('timeSeries');
     const [showDeepAnalysis, setShowDeepAnalysis] = useState(false);
+    const [explainChart, setExplainChart] = useState<ChartType | null>(null);
+    const [chartExplanation, setChartExplanation] = useState<{ loading: boolean; text: string } | null>(null);
 
     // Per-chart variable selection - use Set for better tracking
     const [chartVariables, setChartVariables] = useState<Record<ChartType, Set<string>>>({
@@ -214,6 +216,253 @@ export const VisualizationView: React.FC = () => {
     const stats = useMemo(() => {
         return simulationResult ? getStats(simulationResult, variables) : null;
     }, [simulationResult, variables]);
+
+    // Handle chart AI explanation with real data analysis
+    const handleExplainChart = async (chartType: ChartType) => {
+        setExplainChart(chartType);
+        setChartExplanation({ loading: true, text: '' });
+
+        const chartConfig = CHART_TYPES.find(c => c.id === chartType);
+        const chartVars = getChartVariables(chartType);
+
+        // Build actual analysis data
+        const analysisData = {
+            variables: chartVars,
+            stats: stats ? Object.fromEntries(
+                chartVars.filter(v => stats[v]).map(v => [v, stats[v]])
+            ) : {},
+            trends: chartVars.map(v => {
+                if (!simulationResult?.history) return { variable: v, trend: 'unknown' };
+                const values = simulationResult.history.map(h => h[v] ?? 0);
+                const initial = values[0] || 0;
+                const final = values[values.length - 1] || 0;
+                const change = initial !== 0 ? ((final - initial) / Math.abs(initial)) * 100 : (final !== 0 ? 100 : 0);
+                return {
+                    variable: v,
+                    initial,
+                    final,
+                    change: change.toFixed(1),
+                    trend: change > 5 ? 'increasing' : change < -5 ? 'decreasing' : 'stable'
+                };
+            }),
+            timeRange: simulationResult?.time_points ? {
+                start: simulationResult.time_points[0],
+                end: simulationResult.time_points[simulationResult.time_points.length - 1]
+            } : null,
+            dataPoints: simulationResult?.time_points?.length || 0
+        };
+
+        try {
+            const response = await fetch('http://localhost:8000/ai-explain-chart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model,
+                    simulationResult,
+                    chartType,
+                    variables: chartVars,
+                    viewMode,
+                    analysisData
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setChartExplanation({ loading: false, text: data.explanation });
+            } else {
+                // Generate real analysis from actual data
+                setChartExplanation({
+                    loading: false,
+                    text: generateRealAnalysis(chartType, analysisData),
+                });
+            }
+        } catch {
+            setChartExplanation({
+                loading: false,
+                text: generateRealAnalysis(chartType, analysisData),
+            });
+        }
+
+        // Log the chart explanation
+        addAILog({
+            type: 'analysis',
+            target: chartConfig?.name || chartType,
+            description: `Analyse du graphique "${chartConfig?.name}"`,
+            result: `Variables: ${chartVars.join(', ')}`,
+            viewMode,
+        });
+    };
+
+    // Generate real analysis based on actual simulation data
+    const generateRealAnalysis = (chartType: ChartType, data: any): string => {
+        const { variables, stats: dataStats, trends, timeRange, dataPoints } = data;
+        
+        let analysis = '';
+        
+        switch (chartType) {
+            case 'timeSeries': {
+                analysis = `## 📈 Analyse des Séries Temporelles\n\n`;
+                analysis += `**Période:** ${timeRange?.start?.toFixed(2) || 0} → ${timeRange?.end?.toFixed(2) || 0} (${dataPoints} points)\n\n`;
+                
+                analysis += `### Tendances observées\n\n`;
+                const increasing = trends.filter((t: any) => t.trend === 'increasing');
+                const decreasing = trends.filter((t: any) => t.trend === 'decreasing');
+                const stable = trends.filter((t: any) => t.trend === 'stable');
+                
+                if (increasing.length > 0) {
+                    analysis += `**📈 En croissance:**\n`;
+                    increasing.forEach((t: any) => {
+                        analysis += `- \`${t.variable}\`: **+${t.change}%** (${formatNumber(t.initial)} → ${formatNumber(t.final)})\n`;
+                    });
+                    analysis += '\n';
+                }
+                if (decreasing.length > 0) {
+                    analysis += `**📉 En déclin:**\n`;
+                    decreasing.forEach((t: any) => {
+                        analysis += `- \`${t.variable}\`: **${t.change}%** (${formatNumber(t.initial)} → ${formatNumber(t.final)})\n`;
+                    });
+                    analysis += '\n';
+                }
+                if (stable.length > 0) {
+                    analysis += `**➡️ Stable:**\n`;
+                    stable.forEach((t: any) => {
+                        analysis += `- \`${t.variable}\`: ${t.change}%\n`;
+                    });
+                    analysis += '\n';
+                }
+                
+                if (dataStats && Object.keys(dataStats).length > 0) {
+                    analysis += `### Statistiques détaillées\n\n`;
+                    analysis += `| Variable | Min | Max | Moyenne | Variation |\n`;
+                    analysis += `|----------|-----|-----|---------|----------|\n`;
+                    Object.entries(dataStats).forEach(([v, s]: [string, any]) => {
+                        const range = s.max - s.min;
+                        analysis += `| ${v} | ${formatNumber(s.min)} | ${formatNumber(s.max)} | ${formatNumber(s.mean)} | ${formatNumber(range)} |\n`;
+                    });
+                }
+                break;
+            }
+            
+            case 'phaseSpace': {
+                analysis = `## 🔄 Analyse de l'Espace de Phase\n\n`;
+                if (variables.length >= 2) {
+                    const v1 = trends.find((t: any) => t.variable === variables[0]);
+                    const v2 = trends.find((t: any) => t.variable === variables[1]);
+                    
+                    analysis += `**Axes:** X = \`${variables[0]}\`, Y = \`${variables[1]}\`\n\n`;
+                    
+                    if (v1 && v2) {
+                        const sameDirection = v1.trend === v2.trend;
+                        analysis += `### Comportement dynamique\n\n`;
+                        analysis += `- **${variables[0]}:** ${v1.trend === 'increasing' ? '↑ Croissant' : v1.trend === 'decreasing' ? '↓ Décroissant' : '→ Stable'} (${v1.change}%)\n`;
+                        analysis += `- **${variables[1]}:** ${v2.trend === 'increasing' ? '↑ Croissant' : v2.trend === 'decreasing' ? '↓ Décroissant' : '→ Stable'} (${v2.change}%)\n\n`;
+                        
+                        analysis += `### Interprétation\n\n`;
+                        if (sameDirection && v1.trend !== 'stable') {
+                            analysis += `Les deux variables évoluent dans la **même direction**, suggérant une **corrélation positive**.\n`;
+                        } else if (!sameDirection && v1.trend !== 'stable' && v2.trend !== 'stable') {
+                            analysis += `Les variables évoluent en **sens opposés**, suggérant une **corrélation négative** ou un compromis.\n`;
+                        } else {
+                            analysis += `Le système montre un comportement **mixte** avec des dynamiques variées.\n`;
+                        }
+                    }
+                } else {
+                    analysis += `⚠️ Sélectionnez au moins 2 variables pour l'analyse de phase.\n`;
+                }
+                break;
+            }
+            
+            case 'distribution': {
+                analysis = `## 📊 Analyse de Distribution\n\n`;
+                
+                if (dataStats && Object.keys(dataStats).length > 0) {
+                    Object.entries(dataStats).forEach(([v, s]: [string, any]) => {
+                        const range = s.max - s.min;
+                        const cv = s.mean !== 0 ? (range / Math.abs(s.mean)) * 100 : 0;
+                        
+                        analysis += `### ${v}\n\n`;
+                        analysis += `- **Plage:** ${formatNumber(s.min)} à ${formatNumber(s.max)}\n`;
+                        analysis += `- **Moyenne:** ${formatNumber(s.mean)}\n`;
+                        analysis += `- **Amplitude:** ${formatNumber(range)}\n`;
+                        analysis += `- **Variabilité:** ${cv > 50 ? '🔴 Haute' : cv > 20 ? '🟡 Moyenne' : '🟢 Faible'} (${cv.toFixed(0)}%)\n\n`;
+                    });
+                }
+                break;
+            }
+            
+            case 'comparison': {
+                analysis = `## ⚖️ Comparaison Initial vs Final\n\n`;
+                
+                const sorted = [...trends].sort((a: any, b: any) => parseFloat(b.change) - parseFloat(a.change));
+                
+                analysis += `### Classement par variation\n\n`;
+                sorted.forEach((t: any, i: number) => {
+                    const icon = t.trend === 'increasing' ? '📈' : t.trend === 'decreasing' ? '📉' : '➡️';
+                    const changeNum = parseFloat(t.change);
+                    analysis += `${i + 1}. ${icon} **${t.variable}**: ${changeNum >= 0 ? '+' : ''}${t.change}%\n`;
+                    analysis += `   - Initial: ${formatNumber(t.initial)} → Final: ${formatNumber(t.final)}\n\n`;
+                });
+                
+                // Summary
+                const totalPositive = trends.filter((t: any) => parseFloat(t.change) > 5).length;
+                const totalNegative = trends.filter((t: any) => parseFloat(t.change) < -5).length;
+                analysis += `### Résumé\n`;
+                analysis += `- Variables en croissance: **${totalPositive}**\n`;
+                analysis += `- Variables en déclin: **${totalNegative}**\n`;
+                analysis += `- Variables stables: **${trends.length - totalPositive - totalNegative}**\n`;
+                break;
+            }
+            
+            case 'correlation': {
+                analysis = `## 🔗 Analyse des Corrélations\n\n`;
+                analysis += `Variables analysées: ${variables.length}\n\n`;
+                
+                if (variables.length >= 2) {
+                    analysis += `### Relations probables\n\n`;
+                    for (let i = 0; i < Math.min(variables.length, 4); i++) {
+                        for (let j = i + 1; j < Math.min(variables.length, 4); j++) {
+                            const t1 = trends.find((t: any) => t.variable === variables[i]);
+                            const t2 = trends.find((t: any) => t.variable === variables[j]);
+                            if (t1 && t2) {
+                                const sameDir = t1.trend === t2.trend;
+                                const icon = sameDir ? '🔵' : '🔴';
+                                analysis += `- ${icon} **${variables[i]}** ↔ **${variables[j]}**: ${sameDir ? 'Corrélation positive' : 'Corrélation inverse'}\n`;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+            
+            case 'rates': {
+                analysis = `## 📉 Analyse des Taux de Variation\n\n`;
+                
+                trends.forEach((t: any) => {
+                    const speed = Math.abs(parseFloat(t.change));
+                    const speedLabel = speed > 50 ? '🔴 Rapide' : speed > 20 ? '🟡 Modéré' : '🟢 Lent';
+                    analysis += `### ${t.variable}\n`;
+                    analysis += `- Vitesse de changement: ${speedLabel}\n`;
+                    analysis += `- Variation totale: ${t.change}%\n`;
+                    analysis += `- Direction: ${t.trend === 'increasing' ? '↑ Croissant' : t.trend === 'decreasing' ? '↓ Décroissant' : '→ Stable'}\n\n`;
+                });
+                break;
+            }
+            
+            default:
+                analysis = `## Analyse de ${chartType}\n\nVariables: ${variables.join(', ')}\n`;
+        }
+        
+        return analysis;
+    };
+    
+    // Format numbers for display
+    const formatNumber = (num: number): string => {
+        if (num === undefined || num === null) return 'N/A';
+        if (Math.abs(num) >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
+        if (Math.abs(num) >= 1000) return `${(num / 1000).toFixed(2)}K`;
+        if (Math.abs(num) < 0.01 && num !== 0) return num.toExponential(2);
+        return num.toFixed(2);
+    };
 
     // Calculate rates of change
     const getRates = (result: SimulationResult, vars: string[]) => {
@@ -1170,6 +1419,13 @@ export const VisualizationView: React.FC = () => {
                                                 </div>
                                                 <div className="flex gap-1">
                                                     <button
+                                                        className="p-1 hover:bg-purple-100 rounded transition-colors group"
+                                                        title="Expliquer par l'IA"
+                                                        onClick={() => handleExplainChart(chartType)}
+                                                    >
+                                                        <Brain className="w-4 h-4 text-muted-foreground group-hover:text-purple-500" />
+                                                    </button>
+                                                    <button
                                                         className="p-1 hover:bg-accent rounded transition-colors"
                                                         title="Plein écran"
                                                         onClick={() => setFullscreenChart(chartType)}
@@ -1223,6 +1479,78 @@ export const VisualizationView: React.FC = () => {
                             </button>
                         </div>
                         {renderChart(fullscreenChart, true)}
+                    </div>
+                </div>
+            )}
+
+            {/* Chart Explanation Modal */}
+            {explainChart && (
+                <div
+                    className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+                    onClick={() => {
+                        setExplainChart(null);
+                        setChartExplanation(null);
+                    }}
+                >
+                    <div
+                        className="bg-card rounded-xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-4 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Brain className="w-5 h-5" />
+                                <span className="font-semibold">Explication IA</span>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setExplainChart(null);
+                                    setChartExplanation(null);
+                                }}
+                                className="hover:bg-white/20 rounded p-1 transition-colors"
+                            >
+                                <span className="text-lg leading-none">✕</span>
+                            </button>
+                        </div>
+
+                        {/* Chart name */}
+                        <div className="px-4 py-2 bg-accent/30 border-b text-sm">
+                            <span className="text-muted-foreground">Graphique:</span>{' '}
+                            <span className="font-medium">{CHART_TYPES.find(c => c.id === explainChart)?.name}</span>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-4">
+                            {chartExplanation?.loading ? (
+                                <div className="flex items-center justify-center h-32">
+                                    <div className="flex items-center gap-3 text-muted-foreground">
+                                        <Sparkles className="w-5 h-5 animate-pulse" />
+                                        <span>Analyse en cours...</span>
+                                    </div>
+                                </div>
+                            ) : chartExplanation?.text ? (
+                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                    {chartExplanation.text.split('\n').map((line, i) => {
+                                        if (line.startsWith('**') && line.endsWith('**')) {
+                                            return <h4 key={i} className="font-bold text-primary mt-3 mb-1">{line.replace(/\*\*/g, '')}</h4>;
+                                        }
+                                        if (line.startsWith('- ')) {
+                                            return <li key={i} className="ml-4 text-sm text-muted-foreground">{line.substring(2)}</li>;
+                                        }
+                                        if (line.trim() === '') {
+                                            return <br key={i} />;
+                                        }
+                                        return <p key={i} className="text-sm leading-relaxed">{line}</p>;
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-4 py-3 border-t bg-accent/20 text-xs text-muted-foreground flex items-center gap-2">
+                            <Sparkles className="w-3 h-3" />
+                            <span>Analyse générée par IA pour le mode "{VIEW_MODE_CONFIGS[viewMode].name}"</span>
+                        </div>
                     </div>
                 </div>
             )}

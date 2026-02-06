@@ -5,6 +5,8 @@ import type { NodeProps } from '@xyflow/react';
 import { MoreVertical, Plus, Wand2, Pencil, Trash2, AlertTriangle, Check, Code } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import type { Component, Entity } from '../../types';
+import { AddInfluenceModal } from './AddInfluenceModal';
+import { MentionInput } from '../MentionInput';
 
 // ============================================================================
 // Entity Menu
@@ -333,6 +335,19 @@ const EntityAIEditModal: React.FC<EntityAIEditModalProps> = ({ entityName, entit
     const [proposal, setProposal] = useState<EntityAIProposal | null>(null);
     const [approvedOtherChanges, setApprovedOtherChanges] = useState<Set<number>>(new Set());
 
+    // Prepare options for MentionInput
+    const mentionOptions = React.useMemo(() => {
+        if (!model) return [];
+        const opts: string[] = [];
+        Object.keys(model.entities).forEach(e => {
+            opts.push(e);
+            Object.keys(model.entities[e].components).forEach(c => {
+                opts.push(`${e}.${c}`);
+            });
+        });
+        return opts;
+    }, [model]);
+
     const handleAnalyze = async () => {
         if (!prompt.trim() || !model) return;
         setIsLoading(true);
@@ -384,9 +399,70 @@ const EntityAIEditModal: React.FC<EntityAIEditModalProps> = ({ entityName, entit
     };
 
     const handleApply = () => {
-        // In a real implementation, this would apply the changes
-        console.log('Applying changes:', proposal);
-        onClose();
+        if (!proposal || !model) return;
+
+        try {
+            const newModel = JSON.parse(JSON.stringify(model));
+
+            // Apply each change based on type
+            for (const change of proposal.changes) {
+                const parts = change.target.split('.');
+                const targetEntity = parts[0];
+                const targetComponent = parts[1];
+
+                switch (change.type) {
+                    case 'add_component':
+                        if (!newModel.entities[targetEntity]) {
+                            console.warn(`Entity not found: ${targetEntity}`);
+                            continue;
+                        }
+                        if (targetComponent && !newModel.entities[targetEntity].components[targetComponent]) {
+                            // Add a new state component with default values
+                            newModel.entities[targetEntity].components[targetComponent] = {
+                                type: 'state',
+                                initial: 0.5,
+                                min: 0,
+                                max: 1,
+                                influences: []
+                            };
+                        }
+                        break;
+
+                    case 'delete_component':
+                        if (targetComponent && newModel.entities[targetEntity]?.components[targetComponent]) {
+                            const path = `${targetEntity}.${targetComponent}`;
+                            // Remove influences pointing to this component
+                            Object.values(newModel.entities).forEach((entity: unknown) => {
+                                Object.values((entity as typeof newModel.entities[typeof targetEntity]).components).forEach((comp: unknown) => {
+                                    const component = comp as { influences: { from: string }[] };
+                                    component.influences = component.influences.filter(inf => inf.from !== path);
+                                });
+                            });
+                            delete newModel.entities[targetEntity].components[targetComponent];
+                        }
+                        break;
+
+                    case 'modify_component':
+                        // For modify, we log but don't change without specific field info
+                        console.log(`Modify request for ${change.target}: ${change.description}`);
+                        break;
+
+                    default:
+                        console.log(`Change type ${change.type} not yet implemented`);
+                }
+            }
+
+            // Validate model structure
+            if (!newModel.entities || typeof newModel.entities !== 'object') {
+                throw new Error('Model structure corrupted');
+            }
+
+            _setModel(newModel);
+            onClose();
+        } catch (error) {
+            console.error('Failed to apply entity AI changes:', error);
+            alert('Failed to apply changes. Please try again.');
+        }
     };
 
     const toggleOtherChange = (index: number) => {
@@ -413,11 +489,12 @@ const EntityAIEditModal: React.FC<EntityAIEditModalProps> = ({ entityName, entit
                         <p className="text-sm text-gray-600 mb-3">
                             Describe how you want to modify this entity. The AI will analyze the impact on the system.
                         </p>
-                        <textarea
+                        <MentionInput
                             value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            placeholder="e.g., Add a decay component, increase sensitivity to external factors, simplify the model..."
-                            className="w-full h-28 p-3 border rounded-md text-sm resize-none"
+                            onChange={setPrompt}
+                            options={mentionOptions}
+                            placeholder="e.g., Add a decay component, increase sensitivity to @External.Factor..."
+                            className="min-h-[110px]"
                             disabled={isLoading}
                         />
                         <div className="flex justify-end gap-2 mt-4">
@@ -648,12 +725,14 @@ const DeleteEntityConfirmModal: React.FC<DeleteEntityConfirmModalProps> = ({
 // Main Group Node (Entity)
 // ============================================================================
 export const GroupNode: React.FC<NodeProps> = ({ data, selected }) => {
-    const { model, setModel, selectNode } = useStore();
+    const { model, setModel, selectNode, connectionMode, startConnection, cancelConnection } = useStore();
     const [showMenu, setShowMenu] = useState(false);
     const [showAddComponent, setShowAddComponent] = useState(false);
     const [showAIEdit, setShowAIEdit] = useState(false);
     const [showJSONEditor, setShowJSONEditor] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [showAddInfluence, setShowAddInfluence] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
 
     const entityName = (data as { label: string }).label;
     const entity = model?.entities[entityName];
@@ -744,66 +823,103 @@ export const GroupNode: React.FC<NodeProps> = ({ data, selected }) => {
                 minWidth={200}
                 minHeight={200}
             />
-            <div className="w-full h-full flex flex-col">
+            <div
+                className={`w-full h-full flex flex-col bg-white/50 backdrop-blur-sm rounded-lg transition-all ${connectionMode.active && connectionMode.from !== entityName && !connectionMode.from?.startsWith(entityName + '.')
+                    ? 'cursor-crosshair ring-2 ring-blue-400 border-blue-400 shadow-xl z-10'
+                    : ''
+                    }`}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                onClick={(e) => {
+                    if (connectionMode.active && connectionMode.from && connectionMode.from !== entityName && !connectionMode.from?.startsWith(entityName + '.')) {
+                        e.stopPropagation();
+                        setShowAddInfluence(true);
+                    }
+                }}
+            >
                 <div className="bg-primary text-primary-foreground px-3 py-2 font-bold text-sm rounded-t flex items-center justify-between">
                     <span>{entityName}</span>
-                    <button
-                        ref={menuButtonRef}
-                        onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-                        className="p-1 rounded hover:bg-white/20 transition-colors"
-                    >
-                        <MoreVertical className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        {!connectionMode.active && isHovered && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    startConnection(entityName);
+                                }}
+                                className="p-1 rounded hover:bg-white/20 transition-colors"
+                                title="Connect from this entity"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button
+                            ref={menuButtonRef}
+                            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                            className="p-1 rounded hover:bg-white/20 transition-colors"
+                        >
+                            <MoreVertical className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {showMenu && (
+                        <EntityMenu
+                            onAddComponent={handleAddComponent}
+                            onAIEdit={handleAIEdit}
+                            onViewJSON={handleViewJSON}
+                            onDelete={handleDelete}
+                            onClose={() => setShowMenu(false)}
+                            buttonRef={menuButtonRef}
+                        />
+                    )}
                 </div>
 
-                {showMenu && (
-                    <EntityMenu
-                        onAddComponent={handleAddComponent}
-                        onAIEdit={handleAIEdit}
-                        onViewJSON={handleViewJSON}
-                        onDelete={handleDelete}
-                        onClose={() => setShowMenu(false)}
-                        buttonRef={menuButtonRef}
+                {/* Modals */}
+                {showAddComponent && (
+                    <AddComponentModal
+                        entityName={entityName}
+                        onAddManual={handleAddManualComponent}
+                        onAddAI={(prompt) => console.log('AI add:', prompt)}
+                        onClose={() => setShowAddComponent(false)}
+                    />
+                )}
+
+                {showAIEdit && entity && (
+                    <EntityAIEditModal
+                        entityName={entityName}
+                        entity={entity}
+                        onClose={() => setShowAIEdit(false)}
+                    />
+                )}
+
+                {showJSONEditor && entity && (
+                    <EntityJSONEditorModal
+                        entityName={entityName}
+                        entity={entity}
+                        onSave={handleSaveEntity}
+                        onClose={() => setShowJSONEditor(false)}
+                    />
+                )}
+
+                {showDeleteConfirm && entity && (
+                    <DeleteEntityConfirmModal
+                        entityName={entityName}
+                        componentCount={Object.keys(entity.components).length}
+                        influenceCount={influenceCount}
+                        onConfirm={handleConfirmDelete}
+                        onClose={() => setShowDeleteConfirm(false)}
+                    />
+                )}
+                {showAddInfluence && connectionMode.from && (
+                    <AddInfluenceModal
+                        from={connectionMode.from}
+                        to={entityName}
+                        onClose={() => {
+                            setShowAddInfluence(false);
+                            cancelConnection();
+                        }}
                     />
                 )}
             </div>
-
-            {/* Modals */}
-            {showAddComponent && (
-                <AddComponentModal
-                    entityName={entityName}
-                    onAddManual={handleAddManualComponent}
-                    onAddAI={(prompt) => console.log('AI add:', prompt)}
-                    onClose={() => setShowAddComponent(false)}
-                />
-            )}
-
-            {showAIEdit && entity && (
-                <EntityAIEditModal
-                    entityName={entityName}
-                    entity={entity}
-                    onClose={() => setShowAIEdit(false)}
-                />
-            )}
-
-            {showJSONEditor && entity && (
-                <EntityJSONEditorModal
-                    entityName={entityName}
-                    entity={entity}
-                    onSave={handleSaveEntity}
-                    onClose={() => setShowJSONEditor(false)}
-                />
-            )}
-
-            {showDeleteConfirm && entity && (
-                <DeleteEntityConfirmModal
-                    entityName={entityName}
-                    componentCount={Object.keys(entity.components).length}
-                    influenceCount={influenceCount}
-                    onConfirm={handleConfirmDelete}
-                    onClose={() => setShowDeleteConfirm(false)}
-                />
-            )}
         </>
     );
 };
